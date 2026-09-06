@@ -12204,27 +12204,28 @@
                                                    clique (w state))))
                                            #+acl2-loop-only " :INCLUDED T")
                                           (t "")))
-; TRACE-LOG[emit/defun]: (provenance field, audit 2026-07-26 F1) every
-; world-entering :DEFUN carries an explicit :SOURCE — the Lean side admits
-; only recognized provenance and HARD-FAILS otherwise. :LOCAL-WITNESS marks
-; an event admitted under in-local-flg (the `local` macro's binding): its
-; world effects are DISCARDED from the surrounding scope's final world
-; (encapsulate pass 2 / certification skip it), so a mirror stated over it
-; would be about the witness, not the constrained function — the
-; statement-substitution class (cov-encapsulate reported 2/2 replayed
-; ABOUT THE WITNESS; BUG-019). :INCLUDE-BOOK marks a re-emission during
-; include-book; :ADMITTED is an ordinary live admission.
-; NS1: in-local-flg is NOT Boolean. include-book-process-embedded-events
-; binds it to LOCAL-INCLUDE-BOOK when only the enclosing include is local.
-; Definitions in that included book are ordinary imported definitions, not
-; witnesses of an encapsulate. An actual LOCAL inside the book binds T and
-; must still take the LOCAL-WITNESS arm (BUG-019's exclusion).
+; TRACE-LOG[emit/defun]: classify admitted definitions by their actual event scope.
+; Every world-entering :DEFUN carries recognized :SOURCE provenance.
+; LOCAL-WITNESS is an encapsulate-local admission; LOCAL-HELPER is an
+; ordinary private definition outside any encapsulate. Lean retains both
+; bodies and admission evidence in its canonical model. BUG-019's witness
+; protection is parametric statement abstraction and the dereference guard
+; (ratified R6), not exclusion from the canonical model.
+; in-local-flg is NOT Boolean: LOCAL-INCLUDE-BOOK means only the enclosing
+; include is local. Its imported definitions remain INCLUDE-BOOK. An actual
+; LOCAL inside that book binds T and is classified by the encapsulate stack.
                                (cons #\5 (cond
                                            ((and (global-val 'include-book-path
                                                              (w state))
                                                  (eq (f-get-global 'in-local-flg state)
                                                      'local-include-book))
                                             " :SOURCE :INCLUDE-BOOK")
+                                           ((and (f-get-global 'in-local-flg state)
+                                                 (not (in-encapsulatep
+                                                       (global-val 'embedded-event-lst
+                                                                   (w state))
+                                                       nil)))
+                                            " :SOURCE :LOCAL-HELPER")
                                            ((f-get-global 'in-local-flg state)
                                             " :SOURCE :LOCAL-WITNESS")
                                            ((global-val 'include-book-path
