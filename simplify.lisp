@@ -8427,6 +8427,10 @@
                                                  (caar alist)
                                                  term)))))
 
+; TRACE-LOG[infra/linear-parent-clause]: preserve the clause whose enumerated literal indices label polynomial PT provenance across successive insertions.
+#-acl2-loop-only
+(defvar *structured-linear-parent-clause* nil)
+
 (defun process-equational-polys
   (cl hist rcnst type-alist wrld pot-lst flg ttree)
 
@@ -8591,6 +8595,7 @@
                      (when (and hitp (consp *structured-rewrite-log*))
                        (push (list :linear-equation
                                    :origin 'process-equational-polys/insert
+                                   :parent-clause *structured-linear-parent-clause*
                                    :input-clause cl
                                    :new-literal new-lit
                                    :output-clause next-clause
@@ -8890,11 +8895,14 @@
                   (mv-let
                    (flg new-current-clause ttree)
                    (if (equational-polyp-ok hist wrld)
-                       (pstk
-                        (process-equational-polys
-                         current-clause hist local-rcnst type-alist wrld
-                         simplify-clause-pot-lst nil
-                         remove-trivial-equivalences-ttree))
+; TRACE-LOG[infra/linear-parent-clause-scope]: bind the original pot-source clause before PROCESS-EQUATIONAL-POLYS can insert new literals recursively.
+                       (let (#-acl2-loop-only
+                             (*structured-linear-parent-clause* current-clause))
+                         (pstk
+                          (process-equational-polys
+                           current-clause hist local-rcnst type-alist wrld
+                           simplify-clause-pot-lst nil
+                           remove-trivial-equivalences-ttree)))
                      (mv nil current-clause remove-trivial-equivalences-ttree))
                    (cond
                     (flg
