@@ -14385,6 +14385,8 @@ evaluated.  See :DOC certify-book, in particular, the discussion about ``Step
     if-interp-add-clause ; *structured-rewrite-log* (clausify-trace)
     strip-branches ; *structured-rewrite-log* (clausify-trace, emit/strip-branches/and-shape)
     scons-term ; *structured-rewrite-log*
+    ; TRACE-LOG[infra/linear-insertion-raw-code]: register the equation-insertion logger's raw-only body.
+    process-equational-polys
     remove-trivial-equivalences-rec ; *structured-rewrite-log*
     rewrite ; *structured-rewrite-log*
     rewrite-solidify-rec ; *structured-rewrite-log*

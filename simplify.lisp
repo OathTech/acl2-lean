@@ -8582,10 +8582,28 @@
 ; lhs rhs) below.  But derived-equation has the original lhs and rhs
 ; in them, not the FIXed versions!
 
+; TRACE-LOG[emit/process-equational-polys/insert]: retain the actual linear equation insertion, its numeric completion flags and selected polynomial basis before trivial substitution.
+                  (let ((next-clause (if hitp
+                                         (add-literal new-lit cl nil)
+                                       cl)))
+                    (prog2$
+                     #-acl2-loop-only
+                     (when (and hitp (consp *structured-rewrite-log*))
+                       (push (list :linear-equation
+                                   :origin 'process-equational-polys/insert
+                                   :input-clause cl
+                                   :new-literal new-lit
+                                   :output-clause next-clause
+                                   :numeric-flags (list flag1 flag2)
+                                   :poly-pairs (tagged-objects
+                                                'find-equational-poly ttree1)
+                                   :assumptions (tagged-objects
+                                                 'assumption ttree3)
+                                   :runes (all-runes-in-ttree ttree3 nil))
+                             (cdr *structured-rewrite-log*)))
+                     #+acl2-loop-only nil
                   (process-equational-polys
-                   (if hitp
-                       (add-literal new-lit cl nil)
-                     cl)
+                   next-clause
                    hist rcnst type-alist wrld
                    (cdr pot-lst)
 
@@ -8602,7 +8620,7 @@
 ; this same inequality.  Recall that ttree3 includes ttree1.
 
                                      ttree1))
-                                   ttree)))))))))))
+                                   ttree)))))))))))))
 
 ; We are finally ready to begin the final assault on simplify-clause.
 
