@@ -8048,6 +8048,15 @@
                                splitp
                                state
                                step-limit)
+           (prog2$
+            ; TRACE-LOG[emit/clause-lst/begin-branch]: delimit the branch before crunch-clause-segments emits its substitutions and constant folds
+            #-acl2-loop-only
+            (when (consp *structured-rewrite-log*)
+              (push (list :begin-branch
+                          :origin 'clause-lst/begin-branch :equiv 'equal
+                          :segment (car segs))
+                    (cdr *structured-rewrite-log*)))
+            #+acl2-loop-only nil
            (mv-let (unrewritten unwritten-pts rewritten ttree2)
                    (crunch-clause-segments
                     cdr-tail
@@ -8061,12 +8070,6 @@
                    (prog2$
                     #-acl2-loop-only
                     (when (consp *structured-rewrite-log*)
-                      ; TRACE-LOG[emit/clause-lst/begin-branch]: begin-branch in rewrite-clause-lst
-                      (push (list :begin-branch
-                                  :origin 'clause-lst/begin-branch :equiv 'equal
-                                  :segment (car segs))
-                            (cdr *structured-rewrite-log*))
-
 ; Log context substitutions for equality assumptions in the branch.
 ; When a branch segment contains (NOT (EQUAL lhs rhs)) — meaning the
 ; clause assumes (EQUAL lhs rhs) is TRUE — and one side is a variable,
@@ -8136,7 +8139,7 @@
                              #+acl2-loop-only nil
                              (mv step-limit
                                  flg2 ecnt2 ans2
-                                 ttree3)))))))))
+                                 ttree3))))))))))
 
 )
 
@@ -10493,4 +10496,3 @@
 
   (declare (ignore signal clauses ttree pspv))
   state)
-
