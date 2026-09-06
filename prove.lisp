@@ -8126,15 +8126,20 @@
            (proofs-co state)
            state
            nil)))
-        (process-assumptions-msg1 forcing-round
-                                  (if (= n 1) nil n)
-                                  pairs
-                                  state)
-        (fms "We now undertake Forcing Round ~x0.~%"
-             (list (cons #\0 (1+ forcing-round)))
-             (proofs-co state)
-             state
-             nil))))
+        ; TRACE-LOG[suppress/forcing-round-detail]: the structured boundary above
+        ; owns this output; suppress the remaining explanatory prose (BUG-036).
+        (if (eq (f-get-global 'raw-proof-format state) :structured)
+            state
+          (pprogn
+            (process-assumptions-msg1 forcing-round
+                                      (if (= n 1) nil n)
+                                      pairs
+                                      state)
+            (fms "We now undertake Forcing Round ~x0.~%"
+                 (list (cons #\0 (1+ forcing-round)))
+                 (proofs-co state)
+                 state
+                 nil))))))
 
 (defun count-assumptions (ttree)
 

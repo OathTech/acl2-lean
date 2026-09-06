@@ -318,6 +318,7 @@
 ; TRACE-LOG[emit/preprocess/const-fold]: rewrite-step (:executable-counterpart) — cons-term
 ; folded a ground application to a constant during expand-abbreviations (preprocess); the
 ; rune was already recorded in the ttree, but without this the step itself is unreplayable.
+; The current abbreviation path distinguishes repeated equal ground calls (BUG-037).
               (prog2$
                #-acl2-loop-only
                (when (consp *structured-rewrite-log*)
@@ -325,7 +326,8 @@
                              :rune (list :executable-counterpart fn)
                              :origin 'preprocess/const-fold :equiv 'equal
                              :lhs (cons fn expanded-args)
-                             :rhs term)
+                             :rhs term
+                             :path (reverse *structured-abbrev-path*))
                        (cdr *structured-rewrite-log*)))
                #+acl2-loop-only nil
                (mv step-limit
@@ -421,7 +423,8 @@
                                        :rune (list :executable-counterpart fn)
                                        :origin 'preprocess/eval :equiv 'equal
                                        :lhs term
-                                       :rhs (kwote val))
+                                       :rhs (kwote val)
+                                       :path (reverse *structured-abbrev-path*))
                                  (cdr *structured-rewrite-log*)))
                          #+acl2-loop-only nil
                          (mv step-limit
@@ -665,7 +668,8 @@
                                  :rune '(:if-same-branches nil)
                                  :origin 'preprocess/if-same :equiv 'equal
                                  :lhs (cons 'if expanded-args)
-                                 :rhs b)
+                                 :rhs b
+                                 :path (reverse *structured-abbrev-path*))
                            (cdr *structured-rewrite-log*)))
                    #+acl2-loop-only nil
                    (mv step-limit b ttree)))
@@ -680,7 +684,8 @@
                                  :rune '(:if-simplification nil)
                                  :origin 'preprocess/if-constant-test :equiv 'equal
                                  :lhs (cons 'if expanded-args)
-                                 :rhs (if (eq (cadr a) nil) c b))
+                                 :rhs (if (eq (cadr a) nil) c b)
+                                 :path (reverse *structured-abbrev-path*))
                            (cdr *structured-rewrite-log*)))
                    #+acl2-loop-only nil
                    (mv step-limit
@@ -708,7 +713,8 @@
                                  :rune '(:if-simplification nil)
                                  :origin 'preprocess/if-iff :equiv 'iff ; (if X 't 'nil) => X is an IFF step
                                  :lhs (cons 'if expanded-args)
-                                 :rhs a)
+                                 :rhs a
+                                 :path (reverse *structured-abbrev-path*))
                            (cdr *structured-rewrite-log*)))
                    #+acl2-loop-only nil
                    (mv step-limit a ttree)))
@@ -730,7 +736,8 @@
                              :rune '(:equal-self nil)
                              :origin 'preprocess/equal-self :equiv 'equal
                              :lhs (cons 'equal expanded-args)
-                             :rhs *t*)
+                             :rhs *t*
+                             :path (reverse *structured-abbrev-path*))
                        (cdr *structured-rewrite-log*)))
                #+acl2-loop-only nil
                (mv step-limit *t* ttree)))
