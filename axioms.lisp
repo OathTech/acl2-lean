@@ -14375,6 +14375,7 @@ evaluated.  See :DOC certify-book, in particular, the discussion about ``Step
     rewrite-equal ; *structured-rewrite-log*
     rewrite-if1 ; *structured-rewrite-log*
     rewrite-if11 ; *structured-rewrite-log*
+    translate-lmi/instance ; *structured-use-instances*
     apply-use-hint-clauses ; *structured-rewrite-log*
     encapsulate-pass-2 ; *structured-rewrite-log* (emit/constraints)
     forward-chain-top ; *structured-rewrite-log* (emit/fc-derivations)

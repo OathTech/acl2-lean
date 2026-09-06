@@ -5224,6 +5224,10 @@
       (prog2$
        #-acl2-loop-only
        (progn (setq *structured-rewrite-log* (list :active))
+              ; TRACE-LOG[infra/use-instance-substitutions]: scope recorded
+              ; translations to this structured stream, including hints
+              ; translated before their theorem's first waterfall step.
+              (setq *structured-use-instances* (make-hash-table :test 'equal))
               ; TRACE-LOG[infra/path-window]: reset the window-boundary stack
               ; at stream activation (a mid-window abort in a PRIOR session
               ; segment must not leave a dead boundary that would make later
@@ -5248,6 +5252,9 @@
       (prog2$
        #-acl2-loop-only
        (progn (setq *structured-rewrite-log* nil)
+              ; TRACE-LOG[infra/use-instance-substitutions]: release the stream's
+              ; translated-instance records on deactivation.
+              (setq *structured-use-instances* nil)
               ; TRACE-LOG[infra/cited-symbols]: deactivate the collector when
               ; leaving structured mode (paired with the activation above).
               (setq *structured-cited-symbols* nil))

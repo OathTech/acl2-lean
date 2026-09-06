@@ -32,6 +32,13 @@
 (defvar *structured-rewrite-log* nil
   "When non-nil, accumulates rewrite steps for structured proof output.")
 
+; TRACE-LOG[infra/use-instance-substitutions]: exact successful translated
+; variable substitutions, keyed by pre-instance formula, source substitution,
+; and resulting hypothesis. translate-lmi/instance records the actual adjusted
+; alist; apply-use-hint-clauses emits it with the matching source LMI.
+#-acl2-loop-only
+(defvar *structured-use-instances* nil)
+
 ; TRACE-LOG[infra/ta-derivations]: walk a type-alist entry's ttree into the
 ; :TA-DERIVATIONS provenance payload (close-out cluster item 4, 2026-08-02):
 ; one entry per fc-derivation — the deriving :RUNE, instantiated :CONCL,

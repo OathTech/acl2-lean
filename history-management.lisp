@@ -12031,11 +12031,21 @@
          (merge-sort-symbol< vars)
          (merge-sort-symbol< un-mentioned-vars)
          (untranslate formula t wrld)))
-      (t (value@par (list (sublis-var alist formula)
-                          constraints
-                          event-names
-                          new-entries
-                          origins)))))))
+      (t (progn$
+          ; TRACE-LOG[infra/use-instance-substitutions]: retain the alist AFTER
+          ; ACL2's translation and package-variable adjustment, without
+          ; changing the instance, its constraints, or any return value.
+          #-acl2-loop-only
+          (when *structured-use-instances*
+            (setf (gethash (list formula substn (sublis-var alist formula))
+                           *structured-use-instances*)
+                  alist))
+          #+acl2-loop-only nil
+          (value@par (list (sublis-var alist formula)
+                           constraints
+                           event-names
+                           new-entries
+                           origins))))))))
 
 (defun fn-subst-free-vars (alist)
   (cond ((endp alist) nil)
