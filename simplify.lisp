@@ -7629,24 +7629,12 @@
      (not-flg atm)
      (strip-not (car tail))
      (progn$
-      ; TRACE-LOG[emit/clause/begin-literal]: begin-literal in rewrite-clause
+      ; TRACE-LOG[infra/path-window]: reset the literal-local path scope
+      ; even if type-alist construction closes the clause before rewriting.
+      ; A non-local exit must not leave a boundary from an earlier literal.
       #-acl2-loop-only
       (when (consp *structured-rewrite-log*)
-        ; TRACE-LOG[infra/path-window]: reset the window-boundary stack at
-        ; each literal boundary — a non-local exit (step-limit throw) inside
-        ; a window would otherwise leave a DEAD boundary on the stack: no
-        ; later gstack contains that cell, so the eq stop never fires and
-        ; every later path runs past its legitimate window to the gstack
-        ; bottom (OVER-LONG, not truncated — fold-back audit 2026-07-31 V6);
-        ; windows never span literals, so an empty stack is the
-        ; literal-start invariant
-        (setq *structured-window-gstacks* nil)
-        (push (list :begin-literal
-                    :origin 'clause/begin-literal :equiv 'equal
-                    :index bkptr
-                    :literal (car tail)
-                    :not-flg not-flg)
-              (cdr *structured-rewrite-log*)))
+        (setq *structured-window-gstacks* nil))
       #+acl2-loop-only nil
      (let* ((new-pts (cons (car pts)
                            (access rewrite-constant rcnst :pt)))
@@ -7715,8 +7703,19 @@
                ans
                (cons-tag-trees ttree0 ttree))))
          (t
-          (let ((skip-rewrite-atm (and case-limit
-                                       (> ecnt case-limit)))
+          (let ((skip-rewrite-atm
+                 (prog2$
+; TRACE-LOG[emit/clause/begin-literal]: open only after type-alist construction succeeds; a contradiction closes the clause without rewriting this literal.
+                  #-acl2-loop-only
+                  (when (consp *structured-rewrite-log*)
+                    (push (list :begin-literal
+                                :origin 'clause/begin-literal :equiv 'equal
+                                :index bkptr
+                                :literal (car tail)
+                                :not-flg not-flg)
+                          (cdr *structured-rewrite-log*)))
+                  #+acl2-loop-only nil
+                  (and case-limit (> ecnt case-limit))))
                 (rw-cache-state (access rewrite-constant rcnst
                                         :rw-cache-state)))
             (sl-let

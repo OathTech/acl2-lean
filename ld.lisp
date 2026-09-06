@@ -5763,6 +5763,24 @@
                                            recog-entries)))
                          (proofs-co state) state nil))))))))))))
 
+; TRACE-LOG[infra/cons-term-guards]: retain exactly the primitive entries
+; compiled into cons-term1; emit their original formals and guard terms.
+(defun structured-cons-term-guards (alist)
+  (cond ((endp alist) nil)
+        ((assoc-eq (caar alist) *cons-term1-alist*)
+         (cons (car alist) (structured-cons-term-guards (cdr alist))))
+        (t (structured-cons-term-guards (cdr alist)))))
+
+; TRACE-LOG[emit/cons-term-guards]: snapshot the actual guarded folding
+; domain, distinct from a consumer interpreter's builtin dispatch table.
+(defun emit-cons-term-guards (state)
+  (declare (xargs :mode :program :stobjs state))
+  (fms "~x0~%"
+       (list (cons #\0 (list :cons-term-guards
+                             (structured-cons-term-guards
+                              *primitive-formals-and-guards*))))
+       (proofs-co state) state nil))
+
 ; TRACE-LOG[emit/capture-end]: fork-batch item 8 (2026-08-06, review-1
 ; P0-1/P0-2) — the explicit post-ld capture manifest + completion record.
 ; :BOOKS is the world's include-book-alist (ACL2's OWN record of exactly
@@ -5776,12 +5794,13 @@
   (cond
    ((not (eq (f-get-global 'raw-proof-format state) :structured))
     state)
-   (t (fms "~x0~%"
+   (t (let ((state (emit-cons-term-guards state)))
+        (fms "~x0~%"
            (list (cons #\0 (list :capture-end
                                  :books
                                  (global-val 'include-book-alist (w state))
                                  :status :complete)))
-           (proofs-co state) state nil))))
+           (proofs-co state) state nil)))))
 
 (defmacro set-raw-warning-format (flg)
   (declare (xargs :guard (member-equal flg '(t 't nil 'nil))))

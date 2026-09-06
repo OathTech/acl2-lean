@@ -12214,7 +12214,17 @@
 ; statement-substitution class (cov-encapsulate reported 2/2 replayed
 ; ABOUT THE WITNESS; BUG-019). :INCLUDE-BOOK marks a re-emission during
 ; include-book; :ADMITTED is an ordinary live admission.
+; NS1: in-local-flg is NOT Boolean. include-book-process-embedded-events
+; binds it to LOCAL-INCLUDE-BOOK when only the enclosing include is local.
+; Definitions in that included book are ordinary imported definitions, not
+; witnesses of an encapsulate. An actual LOCAL inside the book binds T and
+; must still take the LOCAL-WITNESS arm (BUG-019's exclusion).
                                (cons #\5 (cond
+                                           ((and (global-val 'include-book-path
+                                                             (w state))
+                                                 (eq (f-get-global 'in-local-flg state)
+                                                     'local-include-book))
+                                            " :SOURCE :INCLUDE-BOOK")
                                            ((f-get-global 'in-local-flg state)
                                             " :SOURCE :LOCAL-WITNESS")
                                            ((global-val 'include-book-path
