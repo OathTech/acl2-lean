@@ -19200,6 +19200,8 @@ its attachment is ignored during proofs"))))
                                                  ; basis, absent on other routes.
                                                  :recog-basis
                                                  *structured-known-recognizer-basis*
+                                                 :if-basis
+                                                 *structured-known-if-basis*
                                                  :ta-runes
                                                  (all-runes-in-ttree nilp-ttree nil)
                                                  :parents

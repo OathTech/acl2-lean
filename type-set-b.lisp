@@ -30,6 +30,8 @@
 #-acl2-loop-only
 (defvar *structured-known-recognizer-basis* nil)
 #-acl2-loop-only
+(defvar *structured-known-if-basis* nil)
+#-acl2-loop-only
 (defvar *structured-lookup-entry* nil)
 #-acl2-loop-only
 (defvar *structured-lookup-basis* nil)
@@ -12627,7 +12629,9 @@
 ; generate 'assumptions and so splitting has to be considered.
 
   ; TRACE-LOG[infra/scope-known-recognizer-basis]: isolate nested queries;
-  ; publish this call's actual root-recognizer basis on every return path.
+  ; publish this call's root-recognizer basis or the root IF's actual mask
+  ; and addressed branch verdicts on every return path. The IF collector
+  ; uses the same initial type-alist and preserves pruned branches as ts=0.
   (let (#-acl2-loop-only
         (*structured-recognizer-query*
          (and (boundp '*structured-rewrite-log*)
@@ -12635,15 +12639,31 @@
               (list x))))
     (cond ((quotep x)
            (progn$
-            #-acl2-loop-only (setq *structured-known-recognizer-basis* nil)
+            #-acl2-loop-only
+            (setq *structured-known-recognizer-basis* nil
+                  *structured-known-if-basis* nil)
             #+acl2-loop-only nil
             (mv t (equal x *nil*) ttree)))
           (t (mv-let (ts ttree1)
                (type-set x force-flg dwp type-alist ens wrld ttree nil nil)
                (progn$
                 #-acl2-loop-only
-                (setq *structured-known-recognizer-basis*
-                      (cdr *structured-recognizer-query*))
+                (let* ((root-recognizer-basis
+                        (cdr *structured-recognizer-query*))
+                       (root-if-basis
+                        (and (consp *structured-recognizer-query*)
+                             (nvariablep x)
+                             (not (fquotep x))
+                             (eq (ffn-symb x) 'if)
+                             (list ts
+                                   (let ((*structured-recognizer-query* nil))
+                                     (tp-collect-if-leaves1
+                                      x nil type-alist nil ens wrld))))))
+                  ; Publish after the collector, so nested diagnostic
+                  ; queries cannot replace this call's returned payload.
+                  (setq *structured-known-recognizer-basis*
+                        root-recognizer-basis
+                        *structured-known-if-basis* root-if-basis))
                 #+acl2-loop-only nil
                 (cond ((ts= ts *ts-nil*)
                        (mv t t ttree1))
