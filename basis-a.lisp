@@ -3284,8 +3284,12 @@
         ((and (eq (car x) 'quote)
               (consp (cdr x))
               (null (cddr x)))
-         (pprogn (princ$ #\' channel state)
-                 (flpr1 (cadr x) channel state eviscp)))
+         ; TRACE-LOG[infra/cited-symbols-quote]: symbols in printed quoted
+         ; data are not function references (e.g. package import lists).
+         ; This raw-only binding changes collection, never printed bytes.
+         (let (#-acl2-loop-only (*structured-cited-symbols* nil))
+           (pprogn (princ$ #\' channel state)
+                   (flpr1 (cadr x) channel state eviscp))))
         (t (pprogn (princ$ #\( channel state)
                    (flpr11 x channel state eviscp)))))
 
@@ -3396,8 +3400,11 @@
         (matched-keyword
          (ppr2-flat (cddr x) channel state eviscp)) ; just like flat!
         (dot (princ$ #\. channel state))
-        (quote (pprogn (princ$ #\' channel state)
-                       (ppr2 (cddr x) (+g! 1 col) channel state eviscp)))
+        ; TRACE-LOG[infra/cited-symbols-quote]: the pretty quote tuple is
+        ; the other printing route for quoted data; match flpr1's domain.
+        (quote (let (#-acl2-loop-only (*structured-cited-symbols* nil))
+                 (pprogn (princ$ #\' channel state)
+                         (ppr2 (cddr x) (+g! 1 col) channel state eviscp))))
         (keypair (pprogn
                   (ppr2-flat (cddr (car (cddr x))) channel state eviscp)
                   (princ$ #\Space channel state)

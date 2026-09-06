@@ -14595,6 +14595,9 @@ evaluated.  See :DOC certify-book, in particular, the discussion about ``Step
     set-debugger-enable-fn ; system::*break-enable* and *debugger-hook*
     break$                 ; break
     prin1$ prin1-with-slashes
+    ; TRACE-LOG[infra/cited-symbols-quote]: raw-only collection suspension
+    ; around quoted data in the two printers (logical output unchanged).
+    flpr1 ppr2
     member-equal assoc-equal subsetp-equal
     rassoc-equal remove-equal position-equal
     maybe-finish-output$
@@ -22506,17 +22509,19 @@ evaluated.  See :DOC certify-book, in particular, the discussion about ``Step
 
 ; TRACE-LOG[infra/cited-symbols]: accumulator for the ground-zero snapshot
 ; emission (external-knowledge design D3/D5). While :structured capture is
-; active this holds an EQ hash-table and prin1$ records EVERY symbol it
+; active this holds an EQ hash-table and prin1$ records every unquoted symbol it
 ; prints (nil = inactive; set up by set-raw-proof-format-fn in ld.lisp,
 ; consumed by emit-ground-zero-snapshots in ld.lisp). "Cited" is thereby
-; DEFINED as "printed anywhere in the captured events" — a deliberate
+; DEFINED as "printed outside quoted data in the captured events" — a deliberate
 ; over-approximation (a variable or rune name may coincide with a fn name);
-; over-inclusion merely emits an extra snapshot, and the replay is
+; The flat/pretty quote printers in basis-a.lisp suspend collection of the
+; datum, so names in package import lists do not demand unrelated cliques.
+; Remaining over-inclusion emits extra snapshots, and the replay is
 ; fail-closed against under-inclusion (a missing def hard-fails at its use
 ; site, never silently).
 #-acl2-loop-only
 (defvar *structured-cited-symbols* nil
-  "When non-nil (an EQ hash-table), prin1$ records every symbol printed.")
+  "When non-nil, prin1$ records symbols printed outside quoted data.")
 
 ; TRACE-LOG[infra/cited-symbols]: read the collector out as a list (raw
 ; helper for emit-ground-zero-snapshots; hash order is nondeterministic, so
