@@ -2679,8 +2679,54 @@
                               (quote-listp args))))
   (cons-term1-body-mv2))
 
+; TRACE-LOG[infra/sublis-fold-basis]: observe actual cons-term folds during a
+; scoped sublis-var call. Logical macro expansions are the original forms;
+; raw bookkeeping never changes a value, substitution, or proof-search choice.
+#-acl2-loop-only
+(defvar *structured-sublis-fold-active* nil)
+#-acl2-loop-only
+(defvar *structured-sublis-fold-path* nil)
+#-acl2-loop-only
+(defvar *structured-sublis-fold-basis* nil)
+
+(defmacro structured-sublis-fold-scope (enabled form)
+  #-acl2-loop-only
+  `(let ((*structured-sublis-fold-active* ,enabled)
+         (*structured-sublis-fold-path* nil))
+     (setq *structured-sublis-fold-basis* nil)
+     ,form)
+  #+acl2-loop-only (declare (ignore enabled))
+  #+acl2-loop-only form)
+
+(defmacro structured-sublis-fold-child (restp form)
+  #-acl2-loop-only
+  `(if *structured-sublis-fold-active*
+       (let ((*structured-sublis-fold-path*
+              (if ,restp
+                  (cons (1+ (car *structured-sublis-fold-path*))
+                        (cdr *structured-sublis-fold-path*))
+                (cons 0 *structured-sublis-fold-path*))))
+         ,form)
+     ,form)
+  #+acl2-loop-only (declare (ignore restp))
+  #+acl2-loop-only form)
+
+(defmacro structured-sublis-fold-result (fn args form)
+  #-acl2-loop-only
+  `(let ((structured-sublis-result ,form))
+     (when (and *structured-sublis-fold-active*
+                (quotep structured-sublis-result))
+       (push (list :path (reverse *structured-sublis-fold-path*)
+                   :lhs (cons ,fn ,args) :rhs structured-sublis-result)
+             *structured-sublis-fold-basis*))
+     structured-sublis-result)
+  #+acl2-loop-only (declare (ignore fn args))
+  #+acl2-loop-only form)
+
 (mutual-recursion
 
+; TRACE-LOG[infra/sublis-fold-walk]: address the actual argument descent and
+; copy each cons-term/cons-term1-mv2 result without repeating its computation.
 (defun sublis-var1 (alist form)
   (declare (xargs :guard (and (symbol-alistp alist)
                               (pseudo-term-listp (strip-cdrs alist))
@@ -2693,14 +2739,22 @@
         ((fquotep form)
          (mv nil form))
         (t (mv-let (changedp lst)
-                   (sublis-var1-lst alist (fargs form))
+                   (structured-sublis-fold-child
+                    nil (sublis-var1-lst alist (fargs form)))
                    (let ((fn (ffn-symb form)))
-                     (cond (changedp (mv t (cons-term fn lst)))
+                     (cond (changedp
+                            (mv t (structured-sublis-fold-result
+                                   fn lst (cons-term fn lst))))
                            ((and (symbolp fn) ; optimization
                                  (quote-listp lst))
-                            (cons-term1-mv2 fn lst form))
+                            (mv-let (foldedp val)
+                                    (cons-term1-mv2 fn lst form)
+                                    (mv foldedp
+                                        (structured-sublis-fold-result fn lst val))))
                            (t (mv nil form))))))))
 
+; TRACE-LOG[infra/sublis-fold-siblings]: increment the observed zero-based
+; argument address for the actual tail traversal; logical call is unchanged.
 (defun sublis-var1-lst (alist l)
   (declare (xargs :guard (and (symbol-alistp alist)
                               (pseudo-term-listp (strip-cdrs alist))
@@ -2710,7 +2764,8 @@
         (t (mv-let (changedp1 term)
                    (sublis-var1 alist (car l))
                    (mv-let (changedp2 lst)
-                           (sublis-var1-lst alist (cdr l))
+                           (structured-sublis-fold-child
+                            t (sublis-var1-lst alist (cdr l)))
                            (cond ((or changedp1 changedp2)
                                   (mv t (cons term lst)))
                                  (t (mv nil l))))))))
