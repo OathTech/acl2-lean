@@ -14338,6 +14338,10 @@ evaluated.  See :DOC certify-book, in particular, the discussion about ``Step
     known-whether-nil ; *structured-known-recognizer-basis*
     lookup-hyp ; *structured-lookup-basis*, *structured-lookup-entry*
     type-set-rec ; *structured-recognizer-query*
+    ; TRACE-LOG[infra/comparison-program-fns]: declare the observational raw
+    ; lookup/table branches while keeping their logical computation unchanged.
+    assoc-type-alist ; *structured-comparison-query*
+    type-set-< ; *structured-comparison-query*
     relieve-hyps1-free-1 ; *structured-rewrite-log* (free-var hyp-relief marker)
     relieve-hyps1-free-2 ; *structured-rewrite-log* (ground-unit hyp-relief markers)
     relieve-hyps1-unify-subst-lst ; *structured-rewrite-log* (F4 retry checkpoint)
