@@ -19135,7 +19135,14 @@ its attachment is ignored during proofs"))))
                             (when (consp *structured-rewrite-log*)
                               (push (list :hyp-relief
                                           :origin 'relieve-hyp/type-alist :equiv 'equal
-                                          :hyp (structured-sublis-var-plain unify-subst hyp))
+                                          :hyp (structured-sublis-var-plain unify-subst hyp)
+                                          :lookup-basis *structured-lookup-basis*
+                                          :ta-runes
+                                          (all-runes-in-ttree
+                                           (cddr *structured-lookup-entry*) nil)
+                                          :parents
+                                          (tagged-objects 'pt
+                                           (cddr *structured-lookup-entry*)))
                                     (cdr *structured-rewrite-log*)))
                             #+acl2-loop-only nil
                             (mv step-limit t nil unify-subst ttree)))
@@ -19182,6 +19189,10 @@ its attachment is ignored during proofs"))))
                                                  :origin 'relieve-hyp/known-true
                                                  :equiv 'equal
                                                  :hyp inst-hyp
+                                                 ; The exact type-set-recognizer
+                                                 ; basis, absent on other routes.
+                                                 :recog-basis
+                                                 *structured-known-recognizer-basis*
                                                  :ta-runes
                                                  (all-runes-in-ttree nilp-ttree nil)
                                                  :parents

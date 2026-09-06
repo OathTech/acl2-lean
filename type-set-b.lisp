@@ -20,6 +20,20 @@
 
 (in-package "ACL2")
 
+; TRACE-LOG[infra/known-recognizer-basis]: dynamically scoped recorder for
+; the EXACT recognizer query in known-whether-nil. The type-set-rec arm
+; copies the argument verdict and enabled tuple it actually consumes;
+; no second type-set query is run. The completed query's payload is read
+; immediately by relieve-hyp/known-true. NIL means this route was not used.
+#-acl2-loop-only
+(defvar *structured-recognizer-query* nil)
+#-acl2-loop-only
+(defvar *structured-known-recognizer-basis* nil)
+#-acl2-loop-only
+(defvar *structured-lookup-entry* nil)
+#-acl2-loop-only
+(defvar *structured-lookup-basis* nil)
+
 ;; Historical Comment from Ruben Gamboa:
 ;; I changed this value from 7 to 10 to make room for the
 ;; positive-, negative-, and complex-irrationals.
@@ -5946,11 +5960,29 @@
 
   (mv-let (term typ rune)
     (term-and-typ-to-lookup hyp wrld ens)
-    (mv-let (ans unify-subst ttree)
-      (search-type-alist term typ type-alist unify-subst ttree wrld)
-      (mv ans unify-subst (if (and ans rune)
+    ; TRACE-LOG[infra/lookup-hyp-basis]: preserve the exact successful
+    ; search entry using the returned list-tail identity, plus the mask
+    ; and recognizer rune term-and-typ-to-lookup actually requested.
+    ; This inlines search-type-alist's wrapper without repeating search.
+    (mv-let (ans unify-subst ttree rest-type-alist)
+      (search-type-alist-with-rest term typ type-alist unify-subst ttree wrld)
+      #+acl2-loop-only (declare (ignore rest-type-alist))
+      (progn$
+       #-acl2-loop-only
+       (progn
+         (setq *structured-lookup-entry*
+               (and ans
+                    (loop for tail on type-alist
+                          when (eq (cdr tail) rest-type-alist)
+                          return (car tail))))
+         (setq *structured-lookup-basis*
+               (and *structured-lookup-entry*
+                    (list (car *structured-lookup-entry*)
+                          (cadr *structured-lookup-entry*) typ rune))))
+       #+acl2-loop-only nil
+       (mv ans unify-subst (if (and ans rune)
                               (push-lemma rune ttree)
-                            ttree)))))
+                            ttree))))))
 
 (defun bind-free-vars-to-unbound-free-vars (vars alist)
 
@@ -8215,7 +8247,20 @@
                         ens w ttree pot-lst pt backchain-limit)
           (mv-let
            (ts1 ttree1)
-           (type-set-recognizer recog-tuple ts1 ttree1 ttree)
+           (progn$
+            ; TRACE-LOG[infra/record-recognizer-basis]: copy the root query's
+            ; consumed argument type-set and active tuple before refinement.
+            #-acl2-loop-only
+            (when (and (consp *structured-recognizer-query*)
+                       (equal x (car *structured-recognizer-query*)))
+              (setf (cdr *structured-recognizer-query*)
+                    (list ts1
+                          (access recognizer-tuple recog-tuple :true-ts)
+                          (access recognizer-tuple recog-tuple :false-ts)
+                          (access recognizer-tuple recog-tuple :strongp)
+                          (access recognizer-tuple recog-tuple :rune))))
+            #+acl2-loop-only nil
+            (type-set-recognizer recog-tuple ts1 ttree1 ttree))
            (mv-let (ts ttree)
                    (type-set-finish x ts0 ttree0 ts1 ttree1 type-alist)
 
@@ -12581,15 +12626,30 @@
 ; (thus, this function is a No-Change Loser).  Note that this function may
 ; generate 'assumptions and so splitting has to be considered.
 
-  (cond ((quotep x)
-         (mv t (equal x *nil*) ttree))
-        (t (mv-let (ts ttree1)
-             (type-set x force-flg dwp type-alist ens wrld ttree nil nil)
-             (cond ((ts= ts *ts-nil*)
-                    (mv t t ttree1))
-                   ((ts-intersectp ts *ts-nil*)
-                    (mv nil nil ttree))
-                   (t (mv t nil ttree1)))))))
+  ; TRACE-LOG[infra/scope-known-recognizer-basis]: isolate nested queries;
+  ; publish this call's actual root-recognizer basis on every return path.
+  (let (#-acl2-loop-only
+        (*structured-recognizer-query*
+         (and (boundp '*structured-rewrite-log*)
+              (consp (symbol-value '*structured-rewrite-log*))
+              (list x))))
+    (cond ((quotep x)
+           (progn$
+            #-acl2-loop-only (setq *structured-known-recognizer-basis* nil)
+            #+acl2-loop-only nil
+            (mv t (equal x *nil*) ttree)))
+          (t (mv-let (ts ttree1)
+               (type-set x force-flg dwp type-alist ens wrld ttree nil nil)
+               (progn$
+                #-acl2-loop-only
+                (setq *structured-known-recognizer-basis*
+                      (cdr *structured-recognizer-query*))
+                #+acl2-loop-only nil
+                (cond ((ts= ts *ts-nil*)
+                       (mv t t ttree1))
+                      ((ts-intersectp ts *ts-nil*)
+                       (mv nil nil ttree))
+                      (t (mv t nil ttree1)))))))))
 
 (defun ts-booleanp (term ens wrld)
   (mv-let (ts ttree)

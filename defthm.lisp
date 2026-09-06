@@ -12166,7 +12166,22 @@
                                       wrld state)))
           (cond
            ((redundant-theoremp name tterm0 classes event-form wrld)
-            (stop-redundant-event ctx state))
+            (pprogn
+             ; TRACE-LOG[emit/defthm]: retain a redundant source declaration,
+             ; including bootstrap redundancies with no earlier include-book
+             ; record. There is no waterfall or QED; :REDUNDANT must never
+             ; be interpreted as a newly proved theorem. This provenance-only
+             ; record does not seed the cited-symbol snapshot collector.
+             (if (eq (f-get-global 'raw-proof-format state) :structured)
+                 (let (#-acl2-loop-only (*structured-cited-symbols* nil))
+                   (fms "(:DEFTHM ~x0 :FORMULA ~x1 :SOURCE :REDUNDANT :CLASSES ~x2 :TFORMULA ~x3)~%"
+                        (list (cons #\0 name)
+                              (cons #\1 (untranslate tterm0 t wrld))
+                              (cons #\2 rule-classes)
+                              (cons #\3 tterm0))
+                        (proofs-co state) state nil))
+               state)
+             (stop-redundant-event ctx state)))
            (t
             (enforce-redundancy
              event-form ctx wrld

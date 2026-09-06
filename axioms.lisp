@@ -14335,6 +14335,9 @@ evaluated.  See :DOC certify-book, in particular, the discussion about ``Step
     rewrite-with-lemma ; *structured-rewrite-log*
     rewrite-with-lemmas ; *structured-rewrite-log* (expand-permission emission)
     relieve-hyp ; *structured-rewrite-log* (silent hyp-relief markers)
+    known-whether-nil ; *structured-known-recognizer-basis*
+    lookup-hyp ; *structured-lookup-basis*, *structured-lookup-entry*
+    type-set-rec ; *structured-recognizer-query*
     relieve-hyps1-free-1 ; *structured-rewrite-log* (free-var hyp-relief marker)
     relieve-hyps1-free-2 ; *structured-rewrite-log* (ground-unit hyp-relief markers)
     relieve-hyps1-unify-subst-lst ; *structured-rewrite-log* (F4 retry checkpoint)
