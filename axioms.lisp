@@ -14342,6 +14342,11 @@ evaluated.  See :DOC certify-book, in particular, the discussion about ``Step
     ; lookup/table branches while keeping their logical computation unchanged.
     assoc-type-alist ; *structured-comparison-query*
     type-set-< ; *structured-comparison-query*
+    ; TRACE-LOG[infra/selected-fc-program-fns]: declare the observational raw
+    ; pair identity, selection and context-result branches.
+    fc-pair-lst ; *structured-fc-pair-sources*
+    select-forward-chained-concls-and-ttrees ; *structured-fc-selection*
+    rewrite-clause-type-alist ; *structured-clause-type-alist-basis*
     relieve-hyps1-free-1 ; *structured-rewrite-log* (free-var hyp-relief marker)
     relieve-hyps1-free-2 ; *structured-rewrite-log* (ground-unit hyp-relief markers)
     relieve-hyps1-unify-subst-lst ; *structured-rewrite-log* (F4 retry checkpoint)

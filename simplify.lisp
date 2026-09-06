@@ -20,6 +20,15 @@
 
 (in-package "ACL2")
 
+; TRACE-LOG[infra/selected-fc-basis]: preserve the source of an actual FC pair
+; by identity, and scope the pairs selected for one context type-alist query.
+#-acl2-loop-only
+(defvar *structured-fc-pair-sources* (make-hash-table :test 'eq))
+#-acl2-loop-only
+(defvar *structured-fc-selection* nil)
+#-acl2-loop-only
+(defvar *structured-clause-type-alist-basis* nil)
+
 ; A quick sketch of the three main functions here
 
 ; We renamed these functions because their Nqthm names were confusing to
@@ -1752,23 +1761,7 @@
              (push (list :fc-derivations
                          :origin 'fc-derivations-expunged :equiv 'equal
                          :derivations
-                         (loop for fcd in objects collect
-                               (list :rune
-                                     (access fc-derivation fcd :rune)
-                                     :concl
-                                     (access fc-derivation fcd :concl)
-                                     :trigger
-                                     (access fc-derivation fcd :inst-trigger)
-                                     :subst
-                                     (access fc-derivation fcd :unify-subst)
-                                     :fc-round
-                                     (access fc-derivation fcd :fc-round)
-                                     :parents
-                                     (collect-parents
-                                      (access fc-derivation fcd :ttree))
-                                     :supports
-                                     (structured-ta-derivations
-                                      (access fc-derivation fcd :ttree)))))
+                         (mapcar #'structured-fc-derivation objects))
                    (cdr *structured-rewrite-log*)))
            (expunge-fc-derivations-assumptions
             (expunge-fc-derivations-lst
@@ -3376,12 +3369,22 @@
 ; the second.
 
   (cond ((null fcd-lst) nil)
-        (t (cons (cons (access fc-derivation (car fcd-lst) :concl)
+        (t (let* (
+                  ; TRACE-LOG[infra/fc-pair-source]: freeze this derivation
+                  ; before expunging its ttree, then attach it to its actual pair.
+                  #-acl2-loop-only
+                  (source (and (consp *structured-rewrite-log*)
+                               (copy-tree (structured-fc-derivation (car fcd-lst)))))
+                  (pair (cons (access fc-derivation (car fcd-lst) :concl)
                        (push-lemma
                         (access fc-derivation (car fcd-lst) :rune)
                         (expunge-fc-derivations
-                         (access fc-derivation (car fcd-lst) :ttree))))
-                 (fc-pair-lst (cdr fcd-lst))))))
+                         (access fc-derivation (car fcd-lst) :ttree))))))
+             (progn$
+              #-acl2-loop-only
+              (when source (setf (gethash pair *structured-fc-pair-sources*) source))
+              #+acl2-loop-only nil
+              (cons pair (fc-pair-lst (cdr fcd-lst))))))))
 
 (defun fc-pair-lst-type-alist (fc-pair-lst fcd-lst type-alist force-flg ens wrld)
 
@@ -4727,31 +4730,7 @@
                     (push (list :fc-derivations
                                 :origin 'fc-derivations :equiv 'equal
                                 :derivations
-                                (loop for fcd in all-approved-fcds collect
-                                      (list :rune
-                                            (access fc-derivation fcd :rune)
-                                            :concl
-                                            (access fc-derivation fcd :concl)
-                                            :trigger
-                                            (access fc-derivation fcd
-                                                    :inst-trigger)
-                                            :subst
-                                            (access fc-derivation fcd
-                                                    :unify-subst)
-                                            :fc-round
-                                            (access fc-derivation fcd
-                                                    :fc-round)
-                                            ; collect-parents (audit
-                                            ; 2026-08-03 F9): pt objects
-                                            ; can be TREES
-                                            :parents
-                                            (collect-parents
-                                             (access fc-derivation fcd
-                                                     :ttree))
-                                            :supports
-                                            (structured-ta-derivations
-                                             (access fc-derivation fcd
-                                                     :ttree)))))
+                                (mapcar #'structured-fc-derivation all-approved-fcds))
                           (cdr *structured-rewrite-log*)))
                   #+acl2-loop-only nil
                   (let ((fc-pair-lst (fc-pair-lst all-approved-fcds)))
@@ -4820,13 +4799,24 @@
         ((to-be-ignoredp (cdr (car fc-pair-lst)) pt)
          (select-forward-chained-concls-and-ttrees (cdr fc-pair-lst)
                                                    pt lits ttree-lst))
-        (t (select-forward-chained-concls-and-ttrees
+        (t (let ((lit (dumb-negate-lit (car (car fc-pair-lst)))))
+             (progn$
+              ; TRACE-LOG[infra/fc-selected-pair]: observe the accepted pair at
+              ; the actual filter branch; cons order matches its returned lists.
+              #-acl2-loop-only
+              (when (consp *structured-fc-selection*)
+                (push (copy-tree
+                       (list :literal lit
+                             :source (gethash (car fc-pair-lst) *structured-fc-pair-sources*)
+                             :ttree (cdr (car fc-pair-lst))))
+                      (car *structured-fc-selection*)))
+              #+acl2-loop-only nil
+              (select-forward-chained-concls-and-ttrees
             (cdr fc-pair-lst)
             pt
-            (cons (dumb-negate-lit (car (car fc-pair-lst)))
-                  lits)
+            (cons lit lits)
             (cons (cdr (car fc-pair-lst))
-                  ttree-lst)))))
+                  ttree-lst)))))))
 
 ; Essay on the Construction of the Type-alist to Rewrite the Current Literal
 
@@ -5103,7 +5093,12 @@
 ; we only put accessible assumptions in it -- but we don't.  We must record the
 ; ttrees because of the possible 'assumption tags.
 
-  (let ((pt (access rewrite-constant rcnst :pt)))
+  (let ((pt (access rewrite-constant rcnst :pt))
+        ; TRACE-LOG[infra/fc-selection-scope]: isolate the selection made by
+        ; this exact type-alist call, without rerunning its parent-tree filter.
+        #-acl2-loop-only
+        (*structured-fc-selection*
+         (and (consp *structured-rewrite-log*) (list nil))))
     (mv-let
       (lits ttree-lst)
       (select-forward-chained-concls-and-ttrees fc-pair-lst pt nil nil)
@@ -5127,7 +5122,18 @@
            (access rewrite-constant rcnst :current-enabled-structure)
            wrld
            pot-lst pt)
-          (mv contradictionp type-alist ttree current-clause))))))
+          (progn$
+           ; TRACE-LOG[infra/clause-type-alist-result]: publish only this call's
+           ; contradiction basis, including its actual selected FC suffix.
+           #-acl2-loop-only
+           (setq *structured-clause-type-alist-basis*
+                 (and contradictionp (consp *structured-fc-selection*)
+                      (copy-tree
+                       (list :acc-clause new-clause :tail tail
+                             :fc-literals lits :selected-fc (car *structured-fc-selection*)
+                             :current-parents pt :ttree ttree))))
+           #+acl2-loop-only nil
+           (mv contradictionp type-alist ttree current-clause)))))))
 
 ; Historical Plaque on Forward Chaining
 
@@ -7751,6 +7757,7 @@
                          :rune '(:fake-rune-for-type-set nil)
                          :origin 'rewrite-clause/type-alist-contradiction
                          :equiv 'equal
+                         :clause-context-basis *structured-clause-type-alist-basis*
                          :lhs (disjoin current-clause)
                          :rhs *t*)
                    (cdr *structured-rewrite-log*)))

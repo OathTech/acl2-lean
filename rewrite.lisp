@@ -39,7 +39,7 @@
 #-acl2-loop-only
 (defvar *structured-use-instances* nil)
 
-; TRACE-LOG[infra/ta-derivations]: walk a type-alist entry's ttree into the
+; TRACE-LOG[infra/ta-derivations]: share FC serialization and walk a ttree into the
 ; :TA-DERIVATIONS provenance payload (close-out cluster item 4, 2026-08-02):
 ; one entry per fc-derivation — the deriving :RUNE, instantiated :CONCL,
 ; :TRIGGER, :SUBST, the grounding parent-tree tags (:PARENTS, the 'pt
@@ -52,21 +52,23 @@
 ; access expands at compile time against linear-a.lisp's record, which
 ; precedes rewrite.lisp in the build order.
 #-acl2-loop-only
+(defun structured-fc-derivation (fcd)
+  (labels ((encode (d)
+             (list :rune (access fc-derivation d :rune)
+                   :concl (access fc-derivation d :concl)
+                   :trigger (access fc-derivation d :inst-trigger)
+                   :subst (access fc-derivation d :unify-subst)
+                   :fc-round (access fc-derivation d :fc-round)
+                   ; Parent tags can be trees; preserve the existing flattening.
+                   :parents (collect-parents (access fc-derivation d :ttree))
+                   :supports (mapcar #'encode
+                                     (tagged-objects 'fc-derivation
+                                                     (access fc-derivation d :ttree))))))
+    (encode fcd)))
+#-acl2-loop-only
 (defun structured-ta-derivations (ttree)
-  (let ((fcds (tagged-objects 'fc-derivation ttree)))
-    (loop for fcd in fcds collect
-          (list :rune (access fc-derivation fcd :rune)
-                :concl (access fc-derivation fcd :concl)
-                :trigger (access fc-derivation fcd :inst-trigger)
-                :subst (access fc-derivation fcd :unify-subst)
-                :fc-round (access fc-derivation fcd :fc-round)
-                ; collect-parents, not raw 'pt tags (audit 2026-08-03
-                ; F9): pt objects can be TREES; ACL2's own report
-                ; flattens them to literal indices the same way
-                :parents (collect-parents
-                          (access fc-derivation fcd :ttree))
-                :supports (structured-ta-derivations
-                           (access fc-derivation fcd :ttree))))))
+  (mapcar #'structured-fc-derivation
+          (tagged-objects 'fc-derivation ttree)))
 
 ; TRACE-LOG[infra/structured-rules]: stash for the REWRITE rules created since
 ; the last flush — one (name hyps equiv lhs rhs) entry per stored rule, pushed
