@@ -19182,7 +19182,14 @@ its attachment is ignored during proofs"))))
                             #+acl2-loop-only nil
                             (mv step-limit t nil unify-subst ttree)))
                           (t
-                           (let* ((inst-hyp (sublis-var unify-subst hyp))
+                           ; TRACE-LOG[infra/hyp-substitution-folds]: scope the
+                           ; actual instantiation's ground-fold recorder and
+                           ; snapshot it before type-set or recursive rewriting.
+                           (let* ((inst-hyp (structured-sublis-fold-scope
+                                            (consp *structured-rewrite-log*)
+                                            (sublis-var unify-subst hyp)))
+                                  #-acl2-loop-only
+                                  (inst-hyp-folds (reverse *structured-sublis-fold-basis*))
                                   (forcer-fn (and forcep1 (ffn-symb hyp0)))
                                   (force-flg (ok-to-force rcnst))
                                   (forcep (and forcep1 force-flg)))
@@ -19224,6 +19231,9 @@ its attachment is ignored during proofs"))))
                                                  :origin 'relieve-hyp/known-true
                                                  :equiv 'equal
                                                  :hyp inst-hyp
+                                                 :unfolded-hyp
+                                                 (structured-sublis-var-plain unify-subst hyp)
+                                                 :subst-folds inst-hyp-folds
                                                  ; The exact type-set-recognizer
                                                  ; basis, absent on other routes.
                                                  :recog-basis
