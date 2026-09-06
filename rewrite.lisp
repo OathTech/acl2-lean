@@ -19240,6 +19240,8 @@ its attachment is ignored during proofs"))))
                                                  *structured-known-recognizer-basis*
                                                  :if-basis
                                                  *structured-known-if-basis*
+                                                 :comparison-basis
+                                                 *structured-known-comparison-basis*
                                                  :ta-runes
                                                  (all-runes-in-ttree nilp-ttree nil)
                                                  :parents

@@ -31,6 +31,12 @@
 (defvar *structured-known-recognizer-basis* nil)
 #-acl2-loop-only
 (defvar *structured-known-if-basis* nil)
+; TRACE-LOG[infra/known-comparison-basis]: root comparison query, its actual
+; lookup candidate, and selected route; published only by the owning query.
+#-acl2-loop-only
+(defvar *structured-comparison-query* nil)
+#-acl2-loop-only
+(defvar *structured-known-comparison-basis* nil)
 #-acl2-loop-only
 (defvar *structured-lookup-entry* nil)
 #-acl2-loop-only
@@ -2603,9 +2609,19 @@
               (t
                (mv *ts-boolean* nil)))
              (if (not (ts= returned-ts *ts-boolean*))
-                 (mv returned-ts
-                     (cons-tag-trees returned-ttree
-                                     ttree0))
+                 (progn$
+                  ; TRACE-LOG[infra/comparison-bound-return]: observe the
+                  ; selected constant-bound route and its returned derivation.
+                  #-acl2-loop-only
+                  (when (and (consp *structured-comparison-query*)
+                             (equal (list '< arg1 arg2)
+                                    (car *structured-comparison-query*)))
+                    (setf (caddr *structured-comparison-query*)
+                          (list :constant-bound :result returned-ts
+                                :derivation returned-ttree)))
+                  #+acl2-loop-only nil
+                  (mv returned-ts
+                      (cons-tag-trees returned-ttree ttree0)))
 
 ; We did not get a useful answer by looking in the type-alist.  We try
 ; 'type-set-<-table if we can.
@@ -2626,7 +2642,19 @@
                                *type-set-<-table* nts1 nts2))))
                  (cond ((or (ts= temp-ts *ts-t*)
                             (ts= temp-ts *ts-nil*))
-                        (mv temp-ts (puffert ttree)))
+                        (progn$
+                         ; TRACE-LOG[infra/comparison-table-return]: record the
+                         ; actual argument masks and numeric table result.
+                         #-acl2-loop-only
+                         (when (and (consp *structured-comparison-query*)
+                                    (equal (list '< arg1 arg2)
+                                           (car *structured-comparison-query*)))
+                           (setf (caddr *structured-comparison-query*)
+                                 (list :table :left-ts ts1 :right-ts ts2
+                                       :numeric-left-ts nts1 :numeric-right-ts nts2
+                                       :result temp-ts)))
+                         #+acl2-loop-only nil
+                         (mv temp-ts (puffert ttree))))
                        ((null pot-lst)
                         (mv *ts-boolean* ttree0))
 
@@ -4068,9 +4096,17 @@
                        (fargn term 2)
                        type-alist))
         (t (let ((temp (assoc-equal term type-alist)))
+             (progn$
+              ; TRACE-LOG[infra/comparison-lookup-candidate]: retain the entry
+              ; returned by the actual root lookup, without another search.
+              #-acl2-loop-only
+              (when (and (consp *structured-comparison-query*)
+                         (equal term (car *structured-comparison-query*)))
+                (setf (cadr *structured-comparison-query*) temp))
+              #+acl2-loop-only nil
              (if temp
                  (mv (cadr temp) (cddr temp))
-               (mv nil nil))))))
+               (mv nil nil)))))))
 
 (defun look-in-type-alist (term type-alist wrld)
   (mv-let (ts ttree)
@@ -8055,7 +8091,17 @@
                        (ts-disjointp
                         ts0
                         (access recognizer-tuple dwp :false-ts))))))
-     (mv ts0 (cons-tag-trees ttree ttree0)))
+     (progn$
+      ; TRACE-LOG[infra/comparison-lookup-return]: this root query actually
+      ; selects its lookup verdict before any primitive recomputation.
+      #-acl2-loop-only
+      (when (and (consp *structured-comparison-query*)
+                 (equal x (car *structured-comparison-query*)))
+        (setf (caddr *structured-comparison-query*)
+              (list :lookup :entry (cadr *structured-comparison-query*)
+                    :result ts0)))
+      #+acl2-loop-only nil
+      (mv ts0 (cons-tag-trees ttree ttree0))))
     ((variablep x)
 
 ; Warning: You may be tempted to change ttree below to nil on the
@@ -12636,12 +12682,22 @@
         (*structured-recognizer-query*
          (and (boundp '*structured-rewrite-log*)
               (consp (symbol-value '*structured-rewrite-log*))
-              (list x))))
+              (list x)))
+        ; TRACE-LOG[infra/scope-known-comparison]: isolate the root < query;
+        ; nested recognizer/IF diagnostics cannot overwrite its selected route.
+        #-acl2-loop-only
+        (*structured-comparison-query*
+         (and (boundp '*structured-rewrite-log*)
+              (consp (symbol-value '*structured-rewrite-log*))
+              (nvariablep x) (not (fquotep x))
+              (eq (ffn-symb x) '<)
+              (list x nil nil))))
     (cond ((quotep x)
            (progn$
             #-acl2-loop-only
             (setq *structured-known-recognizer-basis* nil
-                  *structured-known-if-basis* nil)
+                  *structured-known-if-basis* nil
+                  *structured-known-comparison-basis* nil)
             #+acl2-loop-only nil
             (mv t (equal x *nil*) ttree)))
           (t (mv-let (ts ttree1)
@@ -12663,7 +12719,11 @@
                   ; queries cannot replace this call's returned payload.
                   (setq *structured-known-recognizer-basis*
                         root-recognizer-basis
-                        *structured-known-if-basis* root-if-basis))
+                        *structured-known-if-basis* root-if-basis
+                        *structured-known-comparison-basis*
+                        (and (consp *structured-comparison-query*)
+                             (list :result ts :route
+                                   (caddr *structured-comparison-query*)))))
                 #+acl2-loop-only nil
                 (cond ((ts= ts *ts-nil*)
                        (mv t t ttree1))
