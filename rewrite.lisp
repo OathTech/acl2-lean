@@ -18566,10 +18566,38 @@ its attachment is ignored during proofs"))))
                (mv step-limit *nil* (puffert ttree)))
               ((and (ts-subsetp ts-lhs *ts-boolean*)
                     (equal rhs *t*))
-               (mv step-limit lhs (puffert ttree-lhs)))
+               (progn$
+                ; TRACE-LOG[emit/equal/boolean-lhs]: record the Boolean equality fold and its actual operand type-set.
+                #-acl2-loop-only
+                (when (consp *structured-rewrite-log*)
+                  (push (list :rewrite-step
+                              :path (structured-rewrite-path)
+                              :rune '(:equal-boolean nil)
+                              :origin 'equal/boolean-lhs :equiv 'equal
+                              :lhs (list 'equal lhs rhs) :rhs lhs
+                              :typeset ts-lhs
+                              :arg-leaves (recognizer-arg-leaves lhs type-alist ens wrld)
+                              :runes (all-runes-in-ttree ttree-lhs nil))
+                        (cdr *structured-rewrite-log*)))
+                #+acl2-loop-only nil
+                (mv step-limit lhs (puffert ttree-lhs))))
               ((and (ts-subsetp ts-rhs *ts-boolean*)
                     (equal lhs *t*))
-               (mv step-limit rhs (puffert ttree+)))
+               (progn$
+                ; TRACE-LOG[emit/equal/boolean-rhs]: record the symmetric Boolean equality fold with addressed IF leaves.
+                #-acl2-loop-only
+                (when (consp *structured-rewrite-log*)
+                  (push (list :rewrite-step
+                              :path (structured-rewrite-path)
+                              :rune '(:equal-boolean nil)
+                              :origin 'equal/boolean-rhs :equiv 'equal
+                              :lhs (list 'equal lhs rhs) :rhs rhs
+                              :typeset ts-rhs
+                              :arg-leaves (recognizer-arg-leaves rhs type-alist ens wrld)
+                              :runes (all-runes-in-ttree ttree+ nil))
+                        (cdr *structured-rewrite-log*)))
+                #+acl2-loop-only nil
+                (mv step-limit rhs (puffert ttree+))))
               ((equal lhs *nil*)
                (mv step-limit (mcons-term* 'if rhs *nil* *t*) (puffert ttree)))
               ((equal rhs *nil*)
