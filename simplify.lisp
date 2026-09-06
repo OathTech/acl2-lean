@@ -5551,8 +5551,9 @@
 ; verdict replaces the attempted atom rewrite's ttree with ttree0 plus its own
 ; basis. Keep that same proof path in the log, with any retained expansion.
 #-acl2-loop-only
-(defun acl2lean-retain-type-set-replacement (saved-tail retained)
-  (when (and saved-tail (consp *structured-rewrite-log*))
+(defun acl2lean-retain-type-set-replacement (saved-tail retained before-test)
+  (when (and saved-tail (consp *structured-rewrite-log*)
+             (not (eq (cdr *structured-rewrite-log*) before-test)))
     (let ((verdict (cadr *structured-rewrite-log*)))
       (when (and (consp verdict)
                  (eq (car verdict) :rewrite-step)
@@ -6042,6 +6043,10 @@
 ; boundary returns: independent type-set proof, retained expansion, or the
 ; original rewrite accepted by try-clause. Raw-only snapshots change no value.
                                       (let (#-acl2-loop-only
+                                            (before-type-set
+                                             (when (consp *structured-rewrite-log*)
+                                               (cdr *structured-rewrite-log*)))
+                                            #-acl2-loop-only
                                             (saved-expansion
                                              (when (consp *structured-rewrite-log*)
                                                (cadr *structured-rewrite-log*)))
@@ -6069,7 +6074,7 @@
                                              (unless
                                                  (acl2lean-retain-type-set-replacement
                                                   saved-log-tail
-                                                  (list saved-expansion))
+                                                  (list saved-expansion) before-type-set)
                                                (setf (cdr *structured-rewrite-log*)
                                                      (if (equal tval
                                                                 (cl:getf (cdr saved-expansion)
@@ -6086,6 +6091,13 @@
 
                                       (prepend-step-limit
                                        3
+                                       ; TRACE-LOG[infra/atm-boundary-checkpoint]:
+                                       ; only a verdict emitted by this call may
+                                       ; replace the preceding attempt.
+                                       (let (#-acl2-loop-only
+                                             (before-type-set
+                                              (when (consp *structured-rewrite-log*)
+                                                (cdr *structured-rewrite-log*))))
                                        (mv-let
                                         (tval tttree tfttree)
                                         (try-type-set-and-clause
@@ -6100,14 +6112,14 @@
                                          #-acl2-loop-only
                                          (unless
                                              (acl2lean-retain-type-set-replacement
-                                              saved-log-tail nil)
+                                              saved-log-tail nil before-type-set)
                                            (when (and (consp *structured-rewrite-log*)
                                                       saved-log-tail
                                                       (equal tval atm))
                                              (setf (cdr *structured-rewrite-log*)
                                                    (cdr saved-log-tail))))
                                          #+acl2-loop-only nil
-                                         (mv tval tttree tfttree)))))))
+                                         (mv tval tttree tfttree))))))))
                               (t
                                (mv step-limit ans1 ttree nil))))))))))
 
