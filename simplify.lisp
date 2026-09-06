@@ -5547,6 +5547,20 @@
   (or ttree
       *trivial-non-nil-ttree*))
 
+; TRACE-LOG[infra/atm-type-set-replacement]: a successful isolated type-set
+; verdict replaces the attempted atom rewrite's ttree with ttree0 plus its own
+; basis. Keep that same proof path in the log, with any retained expansion.
+#-acl2-loop-only
+(defun acl2lean-retain-type-set-replacement (saved-tail retained)
+  (when (and saved-tail (consp *structured-rewrite-log*))
+    (let ((verdict (cadr *structured-rewrite-log*)))
+      (when (and (consp verdict)
+                 (eq (car verdict) :rewrite-step)
+                 (eq (cl:getf (cdr verdict) :origin) 'atm/try-type-set))
+        (setf (cdr *structured-rewrite-log*)
+              (cons verdict (append retained (cdr saved-tail))))
+        t))))
+
 (defun try-type-set-and-clause (atm ans ttree ttree0 current-clause wrld ens
                                     knownp knownp-ttree)
 
@@ -6024,17 +6038,47 @@
                                                            (bbody 'implies)))
                                                (cdr *structured-rewrite-log*)))
                                        #+acl2-loop-only nil
-                                      (prepend-step-limit
-                                       3
-                                       (try-type-set-and-clause
-                                        (subcor-var (formals 'implies wrld)
-                                                    (list (fargn atm 1)
-                                                          (fargn atm 2))
-                                                    (bbody 'implies))
-                                        ans1 ttree ttree0 current-clause wrld
-                                        (access rewrite-constant rcnst
-                                                :current-enabled-structure)
-                                        knownp knownp-ttree))))
+; TRACE-LOG[infra/atm-implies-retained-path]: distinguish the three actual
+; boundary returns: independent type-set proof, retained expansion, or the
+; original rewrite accepted by try-clause. Raw-only snapshots change no value.
+                                      (let (#-acl2-loop-only
+                                            (saved-expansion
+                                             (when (consp *structured-rewrite-log*)
+                                               (cadr *structured-rewrite-log*)))
+                                            #-acl2-loop-only
+                                            (before-expansion
+                                             (when (consp *structured-rewrite-log*)
+                                               (cddr *structured-rewrite-log*))))
+                                        (prepend-step-limit
+                                         3
+                                         (mv-let
+                                          (tval tttree tfttree)
+                                          (try-type-set-and-clause
+                                           (subcor-var (formals 'implies wrld)
+                                                       (list (fargn atm 1)
+                                                             (fargn atm 2))
+                                                       (bbody 'implies))
+                                           ans1 ttree ttree0 current-clause wrld
+                                           (access rewrite-constant rcnst
+                                                   :current-enabled-structure)
+                                           knownp knownp-ttree)
+                                          (progn$
+                                           #-acl2-loop-only
+                                           (when (and saved-log-tail
+                                                      (consp *structured-rewrite-log*))
+                                             (unless
+                                                 (acl2lean-retain-type-set-replacement
+                                                  saved-log-tail
+                                                  (list saved-expansion))
+                                               (setf (cdr *structured-rewrite-log*)
+                                                     (if (equal tval
+                                                                (cl:getf (cdr saved-expansion)
+                                                                         :rhs))
+                                                         (cons saved-expansion
+                                                               (cdr saved-log-tail))
+                                                       before-expansion))))
+                                           #+acl2-loop-only nil
+                                           (mv tval tttree tfttree)))))))
                                      (t
 
 ; We make one last effort to allow removal of certain ``trivial'' facts from
@@ -6051,15 +6095,17 @@
                                                  :current-enabled-structure)
                                          knownp knownp-ttree)
                                         (progn$
-; TRACE-LOG[infra/saved-log-tail]: roll back speculative inner events — the
-; type-reasoning-only reduction of the atom was ABANDONED (the heuristic kept
-; the original atm, so the logged derivation is not part of the proof)
+; TRACE-LOG[infra/atm-retained-path]: the isolated type-set winner replaces
+; the attempted rewrite; a failed removal keeps only the original atom.
                                          #-acl2-loop-only
-                                         (when (and (consp *structured-rewrite-log*)
-                                                    saved-log-tail
-                                                    (equal tval atm))
-                                           (setf (cdr *structured-rewrite-log*)
-                                                 (cdr saved-log-tail)))
+                                         (unless
+                                             (acl2lean-retain-type-set-replacement
+                                              saved-log-tail nil)
+                                           (when (and (consp *structured-rewrite-log*)
+                                                      saved-log-tail
+                                                      (equal tval atm))
+                                             (setf (cdr *structured-rewrite-log*)
+                                                   (cdr saved-log-tail))))
                                          #+acl2-loop-only nil
                                          (mv tval tttree tfttree)))))))
                               (t
