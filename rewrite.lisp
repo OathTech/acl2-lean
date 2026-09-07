@@ -3533,9 +3533,29 @@ its attachment is ignored during proofs"))))
 
   (cond ((null assumptions) nil)
         ((eq (car assumptions) :not)
-         (cond ((equal term (cadr assumptions)) 'f)
+         (cond ((equal term (cadr assumptions))
+                (prog2$
+                 ; TRACE-LOG[infra/clausify-call-exact-false]: record the
+                 ; selected negative exact-term assumption in this lookup.
+                 #-acl2-loop-only
+                 (when *structured-clausify-call-collect*
+                   (setq *structured-clausify-call-basis*
+                         (list :kind :exact-term :term (cadr assumptions)
+                               :sign :false)))
+                 #+acl2-loop-only nil
+                 'f))
                (t (if-interp-assumed-value1 term (cddr assumptions)))))
-        ((equal (car assumptions) term) 't)
+        ((equal (car assumptions) term)
+         (prog2$
+          ; TRACE-LOG[infra/clausify-call-exact-true]: record the selected
+          ; positive exact-term assumption in this lookup.
+          #-acl2-loop-only
+          (when *structured-clausify-call-collect*
+            (setq *structured-clausify-call-basis*
+                  (list :kind :exact-term :term (car assumptions)
+                        :sign :true)))
+          #+acl2-loop-only nil
+          't))
         (t (if-interp-assumed-value1 term (cdr assumptions)))))
 
 (defun if-interp-assumed-value2-equal-constant (arg const1 assumptions)

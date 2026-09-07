@@ -14389,7 +14389,7 @@ evaluated.  See :DOC certify-book, in particular, the discussion about ``Step
     create-rewrite-rule ; *structured-rules* (rule emission)
     defthm-fn1 ; *structured-rules* (rule-event flush)
     if-interp ; *structured-rewrite-log* (clausify-trace)
-    call-stack if-interp-assumed-value2 ; *structured-clausify-call-*
+    call-stack if-interp-assumed-value1 if-interp-assumed-value2 ; *structured-clausify-call-*
     if-interp-add-clause ; *structured-rewrite-log* (clausify-trace)
     strip-branches ; *structured-rewrite-log* (clausify-trace, emit/strip-branches/and-shape)
     scons-term ; *structured-rewrite-log*
