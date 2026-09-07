@@ -6788,7 +6788,13 @@
                      :origin 'trivial-equiv/branch-subst :equiv 'equal
                      :equivalence equiv
                      :lhs lhs
-                     :rhs rhs)
+                     :rhs rhs
+                     :substitution-basis
+                     (list :input-clause cl
+                           :literal-position lit-position
+                           :literal lit
+                           :delete-literal
+                           (and remove-flg (eq condition 'disposable))))
                (cdr *structured-rewrite-log*)))
        #+acl2-loop-only nil
       (mv-let (new-cl new-pt-lst ttree)
