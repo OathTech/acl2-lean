@@ -18549,9 +18549,19 @@ its attachment is ignored during proofs"))))
          #+acl2-loop-only nil
          (mv step-limit *nil* (cons-tag-trees ttree-lookup ttree))))
        (t
+        ; TRACE-LOG[infra/equality-operand-query-scope]: collect the two
+        ; executed operand queries and retain any enclosing query collector.
         (let ((ens (access rewrite-constant rcnst
                            :current-enabled-structure))
-              (ok-to-force (ok-to-force rcnst)))
+              (ok-to-force (ok-to-force rcnst))
+              #-acl2-loop-only
+              (structured-parent-equality-queries *structured-ts-queries*)
+              #-acl2-loop-only
+              (*structured-ts-queries*
+               (and (or (consp *structured-rewrite-log*) *structured-ts-queries*)
+                    (list nil)))
+              #-acl2-loop-only
+              (structured-equality-basis nil))
           (mv-let
            (ts-lhs ttree-lhs)
            (type-set lhs ok-to-force nil
@@ -18566,7 +18576,23 @@ its attachment is ignored during proofs"))))
                       (access rewrite-constant rcnst :pt))
             (mv-let
              (ts-equality ttree-equality)
-             (type-set-equal ts-lhs ts-rhs ttree+ ttree)
+             (prog2$
+              ; TRACE-LOG[infra/equality-operand-query-snapshot]: snapshot
+              ; only the actual operand calls, forward their records once to
+              ; an enclosing collector, and restore it before continuation.
+              #-acl2-loop-only
+              (progn
+                (setq structured-equality-basis
+                      (and *structured-ts-queries*
+                           (list :type-alist type-alist
+                                 :queries (reverse (car *structured-ts-queries*)))))
+                (when structured-parent-equality-queries
+                  (setf (car structured-parent-equality-queries)
+                        (append (car *structured-ts-queries*)
+                                (car structured-parent-equality-queries))))
+                (setq *structured-ts-queries* structured-parent-equality-queries))
+              #+acl2-loop-only nil
+              (type-set-equal ts-lhs ts-rhs ttree+ ttree))
              (cond
               ((ts= ts-equality *ts-t*)
                (progn$
@@ -18588,7 +18614,9 @@ its attachment is ignored during proofs"))))
                               :lhs (fcons-term* 'equal lhs rhs)
                               :rhs *t*
                               :lhs-ts ts-lhs
-                              :rhs-ts ts-rhs)
+                              :rhs-ts ts-rhs
+                              ; TRACE-LOG[emit/equal/type-set-true]: retain the two executed operand query derivations.
+                              :operand-type-basis structured-equality-basis)
                         (cdr *structured-rewrite-log*)))
                 #+acl2-loop-only nil
                 (mv step-limit *t* ttree-equality)))
@@ -18607,7 +18635,9 @@ its attachment is ignored during proofs"))))
                               :lhs (fcons-term* 'equal lhs rhs)
                               :rhs *nil*
                               :lhs-ts ts-lhs
-                              :rhs-ts ts-rhs)
+                              :rhs-ts ts-rhs
+                              ; TRACE-LOG[emit/equal/type-set-nil]: retain the two executed operand query derivations.
+                              :operand-type-basis structured-equality-basis)
                         (cdr *structured-rewrite-log*)))
                 #+acl2-loop-only nil
                 (mv step-limit *nil* ttree-equality)))
