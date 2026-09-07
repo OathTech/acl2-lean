@@ -1601,10 +1601,7 @@
             (mv-let
              (fn-cnt p-fn-cnt)
              (fn-count concl)
-             (add-fc-derivations rune (cdr concls) unify-subst inst-trigger
-                                 fc-round ens wrld state ttree
-                                 (cons
-                                  (make fc-derivation
+             (let ((fcd (make fc-derivation
                                         :fc-round fc-round
                                         :rune rune
                                         :concl concl
@@ -1612,8 +1609,19 @@
                                         :p-fn-cnt p-fn-cnt
                                         :inst-trigger inst-trigger
                                         :unify-subst unify-subst
-                                        :ttree new-ttree)
-                                  fcd-lst)))))))
+                                        :ttree new-ttree)))
+               (progn$
+                ; TRACE-LOG[infra/fc-created-rule]: attach the enclosing
+                ; successful activation's stored rule to its actual object.
+                #-acl2-loop-only
+                (when (and (consp *structured-rewrite-log*)
+                           *structured-fc-rule-basis*)
+                  (setf (gethash fcd *structured-fc-derivation-rules*)
+                        (copy-tree *structured-fc-rule-basis*)))
+                #+acl2-loop-only nil
+                (add-fc-derivations rune (cdr concls) unify-subst inst-trigger
+                                   fc-round ens wrld state ttree
+                                   (cons fcd fcd-lst)))))))))
 
 ; The following function is not used in forward chaining except as a
 ; trace/debugging tool.  Given an fc-derivation, it produces a human
@@ -3063,7 +3071,19 @@
 ; We succeeded in relieving all the hypotheses of this activation.  We
 ; produce the resultant fc-derivations and add them to fcd-lst.
 
-    (mv suspensions
+    ; TRACE-LOG[infra/fc-success-rule-scope]: observe this activation's actual
+    ; stored rule, including ordinary book rules absent from GZ snapshots.
+    (let (
+          #-acl2-loop-only
+          (*structured-fc-rule-basis*
+           (and (consp *structured-rewrite-log*)
+                (let ((rule (access fc-activation act0 :rule)))
+                  (list :rune (access forward-chaining-rule rule :rune)
+                        :trigger (access forward-chaining-rule rule :trigger)
+                        :hyps (access forward-chaining-rule rule :hyps)
+                        :concls (access forward-chaining-rule rule :concls)
+                        :match-free (access forward-chaining-rule rule :match-free))))))
+     (mv suspensions
         (add-fc-derivations (access forward-chaining-rule
                                     (access fc-activation act0 :rule)
                                     :rune)
@@ -3076,7 +3096,7 @@
                             (access fc-activation act0 :inst-trigger)
                             fc-round ens wrld state
                             ttree
-                            fcd-lst)))
+                            fcd-lst))))
    (t
     (let* ((forcep1 (and (nvariablep (car hyps))
 ;                        (not (fquotep (car hyps)))

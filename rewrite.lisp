@@ -39,6 +39,13 @@
 #-acl2-loop-only
 (defvar *structured-use-instances* nil)
 
+; TRACE-LOG[infra/fc-rule-basis]: the actual stored rule at a successful FC
+; activation, attached by identity to each derivation it creates.
+#-acl2-loop-only
+(defvar *structured-fc-rule-basis* nil)
+#-acl2-loop-only
+(defvar *structured-fc-derivation-rules* (make-hash-table :test 'eq))
+
 ; TRACE-LOG[infra/ta-derivations]: share FC serialization and walk a ttree into the
 ; :TA-DERIVATIONS provenance payload (close-out cluster item 4, 2026-08-02):
 ; one entry per fc-derivation — the deriving :RUNE, instantiated :CONCL,
@@ -63,7 +70,8 @@
                    :parents (collect-parents (access fc-derivation d :ttree))
                    :supports (mapcar #'encode
                                      (tagged-objects 'fc-derivation
-                                                     (access fc-derivation d :ttree))))))
+                                                     (access fc-derivation d :ttree)))
+                   :rule-basis (gethash d *structured-fc-derivation-rules*))))
     (encode fcd)))
 #-acl2-loop-only
 (defun structured-ta-derivations (ttree)

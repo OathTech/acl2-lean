@@ -14347,6 +14347,10 @@ evaluated.  See :DOC certify-book, in particular, the discussion about ``Step
     fc-pair-lst ; *structured-fc-pair-sources*
     select-forward-chained-concls-and-ttrees ; *structured-fc-selection*
     rewrite-clause-type-alist ; *structured-clause-type-alist-basis*
+    ; TRACE-LOG[infra/fc-rule-program-fns]: declare the actual FC rule-scope
+    ; and created-object attachment observers.
+    advance-fc-activation2 ; *structured-fc-rule-basis*
+    add-fc-derivations ; *structured-fc-derivation-rules*
     relieve-hyps1-free-1 ; *structured-rewrite-log* (free-var hyp-relief marker)
     relieve-hyps1-free-2 ; *structured-rewrite-log* (ground-unit hyp-relief markers)
     relieve-hyps1-unify-subst-lst ; *structured-rewrite-log* (F4 retry checkpoint)
