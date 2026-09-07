@@ -18687,9 +18687,33 @@ its attachment is ignored during proofs"))))
                 #+acl2-loop-only nil
                 (mv step-limit rhs (puffert ttree+))))
               ((equal lhs *nil*)
-               (mv step-limit (mcons-term* 'if rhs *nil* *t*) (puffert ttree)))
+; TRACE-LOG[emit/equal/nil-lhs]: record the executed equality-to-NIL normalization and its actual mcons-term result.
+               (let ((result (mcons-term* 'if rhs *nil* *t*)))
+                 (progn$
+                  #-acl2-loop-only
+                  (when (consp *structured-rewrite-log*)
+                    (push (list :rewrite-step
+                                :path (structured-rewrite-path)
+                                :rune '(:equal-nil nil)
+                                :origin 'equal/nil-lhs :equiv 'equal
+                                :lhs (list 'equal lhs rhs) :rhs result)
+                          (cdr *structured-rewrite-log*)))
+                  #+acl2-loop-only nil
+                  (mv step-limit result (puffert ttree)))))
               ((equal rhs *nil*)
-               (mv step-limit (mcons-term* 'if lhs *nil* *t*) (puffert ttree)))
+; TRACE-LOG[emit/equal/nil-rhs]: record the executed equality-to-NIL normalization and its actual mcons-term result.
+               (let ((result (mcons-term* 'if lhs *nil* *t*)))
+                 (progn$
+                  #-acl2-loop-only
+                  (when (consp *structured-rewrite-log*)
+                    (push (list :rewrite-step
+                                :path (structured-rewrite-path)
+                                :rune '(:equal-nil nil)
+                                :origin 'equal/nil-rhs :equiv 'equal
+                                :lhs (list 'equal lhs rhs) :rhs result)
+                          (cdr *structured-rewrite-log*)))
+                  #+acl2-loop-only nil
+                  (mv step-limit result (puffert ttree)))))
               ((equalityp lhs)
                ; TRACE-LOG[emit/equal/case-split-lhs]: rewrite-step in rewrite-equal —
                ; the boolean CASE-RESTRUCTURING of (equal (equal a b) rhs), previously
