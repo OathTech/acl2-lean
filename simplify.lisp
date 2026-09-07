@@ -8992,6 +8992,18 @@
                          (pos unhidden-lit old-cl-id)
                          (unhidden-lit-info hist top-clause 0 wrld)
                          (cond (pos (let ((tail (nthcdr (1+ pos) top-clause)))
+                                      (prog2$
+                                       ; TRACE-LOG[emit/simplify-clause/unhide-literal]: record the selected post-rewrite HIDE removal and its exact clause position.
+                                       #-acl2-loop-only
+                                       (when (consp *structured-rewrite-log*)
+                                         (push (list :unhide-literal
+                                                     :origin 'simplify-clause/unhide-literal
+                                                     :input-clause top-clause
+                                                     :position pos
+                                                     :old-literal (nth pos top-clause)
+                                                     :new-literal unhidden-lit)
+                                               (cdr *structured-rewrite-log*)))
+                                       #+acl2-loop-only nil
                                       (mv step-limit
                                           'hit-rewrite
                                           (list (append (take pos top-clause)
@@ -9005,7 +9017,7 @@
                                             'clause-id old-cl-id
                                             (push-lemma (fn-rune-nume 'hide nil
                                                                       nil wrld)
-                                                        (rw-cache ttree)))))))
+                                                        (rw-cache ttree))))))))
                                (t (mv step-limit nil ans ttree)))))
                        (t
                         #-acl2-loop-only (dmr-flush t)
