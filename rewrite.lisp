@@ -5333,7 +5333,8 @@ its attachment is ignored during proofs"))))
                             (obj-table term ts ts-ttree
                                        obj geneqv wrld ttree)
                             (progn$
-                             ; TRACE-LOG[emit/solidify/type-alist]: rewrite-step (:type-alist) in rewrite-solidify-rec
+                             ; TRACE-LOG[emit/solidify/type-alist]: retain the actual obj-table input
+                             ; type-set with its replacement in rewrite-solidify-rec
                              #-acl2-loop-only
                              (when (and (consp *structured-rewrite-log*)
                                         (not (equal solidified-term term)))
@@ -5341,6 +5342,7 @@ its attachment is ignored during proofs"))))
                             :path (structured-rewrite-path) ; congruence position; see structured-rewrite-path
                                            :rune '(:type-alist nil)
                                            :origin 'solidify/type-alist :equiv 'equal
+                                           :typeset ts
                                            :lhs term
                                            :rhs solidified-term
                                            :parents (tagged-objects

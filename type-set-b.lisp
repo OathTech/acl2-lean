@@ -37,6 +37,10 @@
 (defvar *structured-comparison-query* nil)
 #-acl2-loop-only
 (defvar *structured-known-comparison-basis* nil)
+; TRACE-LOG[infra/comparison-bound-basis]: selected type-alist entry of the
+; active constant-bound scan; the actual successful arm writes this cell.
+#-acl2-loop-only
+(defvar *structured-comparison-bound* nil)
 ; TRACE-LOG[infra/fc-type-query-tree]: collect the actual recursive type-set
 ; calls inside an active hypothesis or IF query. Cells retain child order, the
 ; lookup pair, and the selected local route; no second query is performed.
@@ -2496,8 +2500,15 @@
 
 ;   (r <= c < arg2) implies (r < arg2), and hence also not (arg2 < r).
 
-                          (mv (if commutedp *ts-nil* *ts-t*)
-                              (puffert ttree)))
+                          (progn$
+                           ; TRACE-LOG[infra/comparison-bound-selected-1]: retain the
+                           ; actual successful type-alist entry, without rescanning.
+                           #-acl2-loop-only
+                           (when (consp *structured-comparison-bound*)
+                             (setf (car *structured-comparison-bound*) type-alist-entry))
+                           #+acl2-loop-only nil
+                           (mv (if commutedp *ts-nil* *ts-t*)
+                              (puffert ttree))))
                          ((and (if commutedp (< c r) (<= c r))
                                (ts= type *ts-nil*)
                                (equal x arg2))
@@ -2505,8 +2516,15 @@
 ;   (arg2 <= c <= r) implies not (r < arg2);
 ;   (arg2 <= c <  r) implies (arg2 < r).
 
-                          (mv (if commutedp *ts-t* *ts-nil*)
-                              (puffert ttree)))
+                          (progn$
+                           ; TRACE-LOG[infra/comparison-bound-selected-2]: retain the
+                           ; actual successful type-alist entry, without rescanning.
+                           #-acl2-loop-only
+                           (when (consp *structured-comparison-bound*)
+                             (setf (car *structured-comparison-bound*) type-alist-entry))
+                           #+acl2-loop-only nil
+                           (mv (if commutedp *ts-t* *ts-nil*)
+                              (puffert ttree))))
                          (t
                           (type-set-<-1 r arg2 commutedp (cdr type-alist)))))
                        (t ; (not leftp)
@@ -2521,16 +2539,30 @@
 ;   (r <  c <= arg2) implies (r < arg2);
 ;   (r <= c <= arg2) implies not (arg2 < r).
 
-                          (mv (if commutedp *ts-nil* *ts-t*)
-                              (puffert ttree)))
+                          (progn$
+                           ; TRACE-LOG[infra/comparison-bound-selected-3]: retain the
+                           ; actual successful type-alist entry, without rescanning.
+                           #-acl2-loop-only
+                           (when (consp *structured-comparison-bound*)
+                             (setf (car *structured-comparison-bound*) type-alist-entry))
+                           #+acl2-loop-only nil
+                           (mv (if commutedp *ts-nil* *ts-t*)
+                              (puffert ttree))))
                          ((and (<= c r)
                                (ts= type *ts-t*)
                                (equal x arg2))
 
 ;   (arg2 < c <= r) implies not (r < arg2) and also implies (arg2 < r).
 
-                          (mv (if commutedp *ts-t* *ts-nil*)
-                              (puffert ttree)))
+                          (progn$
+                           ; TRACE-LOG[infra/comparison-bound-selected-4]: retain the
+                           ; actual successful type-alist entry, without rescanning.
+                           #-acl2-loop-only
+                           (when (consp *structured-comparison-bound*)
+                             (setf (car *structured-comparison-bound*) type-alist-entry))
+                           #+acl2-loop-only nil
+                           (mv (if commutedp *ts-t* *ts-nil*)
+                              (puffert ttree))))
                          (t
                           (type-set-<-1 r arg2 commutedp
                                         (cdr type-alist))))))))
@@ -2558,8 +2590,13 @@
 ; of some simple inequalities which would be missed otherwise.
 ; See type-set-<-1 for details.
 
+  ; TRACE-LOG[infra/comparison-bound-scope]: isolate each comparison's
+  ; actual constant-bound scan, including recursive shifted comparisons.
   (let* ((nts1 (numeric-type-set ts1))
-         (nts2 (numeric-type-set ts2)))
+         (nts2 (numeric-type-set ts2))
+         #-acl2-loop-only
+         (*structured-comparison-bound*
+          (and (consp *structured-comparison-query*) (list nil))))
     (cond ((and (equal arg2 *1*)
 
 ; Actually we don't have to add 0 back in, as done by numeric-type-set, before
@@ -2623,6 +2660,7 @@
                                     (car *structured-comparison-query*)))
                     (setf (caddr *structured-comparison-query*)
                           (list :constant-bound :result returned-ts
+                                :entry (car *structured-comparison-bound*)
                                 :derivation returned-ttree)))
                   #+acl2-loop-only nil
                   (mv returned-ts
