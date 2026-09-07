@@ -120,6 +120,15 @@
 (defvar *clausify-trace* nil
   "When non-nil, if-interp pushes literal-clausify decision events.")
 
+; TRACE-LOG[infra/clausify-call-assumptions]: retain actual NOT/CALL lookup
+; results and their selected binary assumptions within a literal's trace.
+#-acl2-loop-only
+(defvar *structured-clausify-call-collect* nil)
+#-acl2-loop-only
+(defvar *structured-clausify-call-basis* nil)
+#-acl2-loop-only
+(defvar *structured-clausify-call-pending* nil)
+
 ; TRACE-LOG[infra/clausify-trace-path]: the assumption path ABOVE the
 ; :ignore-when-converting-to-clause marker (the tests split so far within the
 ; literal being clausified), outermost-first, as (:t . test) / (:f . test)
@@ -3597,7 +3606,16 @@ its attachment is ignored during proofs"))))
                            (equal arg2 (fargn term 2)))
                       (and (equal arg1 (fargn term 2))
                            (equal arg2 (fargn term 1)))))
-             'f)
+             (prog2$
+              ; TRACE-LOG[infra/clausify-call-binary-false]: record the
+              ; actual selected negative commutative-binary assumption.
+              #-acl2-loop-only
+              (when *structured-clausify-call-collect*
+                (setq *structured-clausify-call-basis*
+                      (list :kind :commutative-binary :term term
+                            :sign :false :fn fn)))
+              #+acl2-loop-only nil
+              'f))
             (t (if-interp-assumed-value2 fn arg1 arg2 (cddr assumptions))))))
         ((let* ((term (car assumptions))
                 (term-fn (and (nvariablep term)
@@ -3614,7 +3632,16 @@ its attachment is ignored during proofs"))))
                          (equal arg2 (fargn term 2)))
                     (and (equal arg1 (fargn term 2))
                          (equal arg2 (fargn term 1))))))
-         't)
+         (prog2$
+          ; TRACE-LOG[infra/clausify-call-binary-true]: record the actual
+          ; selected positive commutative-binary assumption.
+          #-acl2-loop-only
+          (when *structured-clausify-call-collect*
+            (setq *structured-clausify-call-basis*
+                  (list :kind :commutative-binary :term (car assumptions)
+                        :sign :true :fn fn)))
+          #+acl2-loop-only nil
+          't))
         (t (if-interp-assumed-value2 fn arg1 arg2 (cdr assumptions)))))
 
 (defun if-interp-assumed-value3 (term assumptions)
@@ -3931,8 +3958,27 @@ its attachment is ignored during proofs"))))
                      (if (eq (cadr x) nil)
                          *t*
                        *nil*))
-                    (t (let ((temp (if-interp-assumed-value x
-                                                            assumptions)))
+                    (t (let ((temp
+                              (prog2$
+                               ; TRACE-LOG[infra/clausify-call-query]: reset
+                               ; before the single actual assumption lookup.
+                               #-acl2-loop-only
+                               (setq *structured-clausify-call-basis* nil)
+                               #+acl2-loop-only nil
+                               (if-interp-assumed-value x assumptions))))
+                         (prog2$
+                          ; TRACE-LOG[infra/clausify-call-result]: copy only
+                          ; a successful actual NOT lookup, with its path.
+                          #-acl2-loop-only
+                          (when (and *structured-clausify-call-collect*
+                                     (or (eq temp t) (eq temp 'f)))
+                            (push (list :input (list 'not x)
+                                        :output (if (eq temp t) *nil* *t*)
+                                        :query x :value temp
+                                        :basis *structured-clausify-call-basis*
+                                        :path (clausify-trace-path assumptions))
+                                  *structured-clausify-call-pending*))
+                          #+acl2-loop-only nil
                          (cond ((eq temp t) *nil*)
                                ((eq temp 'f) *t*)
 ;                              ((variablep x) (list 'not x))
@@ -3953,7 +3999,7 @@ its attachment is ignored during proofs"))))
 ;                              ((eq (ffn-symb x) 'not)
 ;                               (fargn x 1))
 
-                               (t (list 'not x))))))))
+                               (t (list 'not x)))))))))
                 ((eq fn 'equal)
                  (cond
                   ((equal (car ac) (cadr ac))
@@ -4030,6 +4076,15 @@ its attachment is ignored during proofs"))))
         (t (call-stack fn (cdr lst) (cdr stack)
                        assumptions
                        (cons (car stack) ac)))))
+
+; TRACE-LOG[infra/clausify-call-scope]: the real CALL's pflg scopes the
+; recorder; counting and non-literal clausifications remain unobserved.
+#-acl2-loop-only
+(defun structured-clausify-call-stack (fn lst stack assumptions ac pflg)
+  (let ((*structured-clausify-call-collect*
+         (and *clausify-trace* (null pflg)
+              (consp *structured-rewrite-log*))))
+    (call-stack fn lst stack assumptions ac)))
 
 (defun ret-stack (lst stack)
   (cond ((null lst) stack)
@@ -4296,6 +4351,7 @@ its attachment is ignored during proofs"))))
                       :value v
                       :outcome outcome
                       :path (clausify-trace-path assumptions)
+                      :call-assumptions (reverse *structured-clausify-call-pending*)
                       (if (eq outcome 'dropped)
                           nil
                         (list :segment
@@ -4303,7 +4359,12 @@ its attachment is ignored during proofs"))))
                                assumptions
                                (if (eq outcome 'segment-open) (list v) nil)
                                nil))))
-               pflg))
+               pflg)
+              ; TRACE-LOG[infra/clausify-call-flush]: each observed call
+              ; appears once, with the next leaf in the actual trace.
+              (when (and *clausify-trace* (null pflg)
+                         (consp *structured-rewrite-log*))
+                (setq *structured-clausify-call-pending* nil)))
             #+acl2-loop-only nil
             (or (cond ((quotep v)
                        (cond ((equal v *nil*)
@@ -4350,6 +4411,11 @@ its attachment is ignored during proofs"))))
                                ac
                                pflg))
                (call (if-interp (cdr instrs)
+                                #-acl2-loop-only
+                                (structured-clausify-call-stack
+                                 (cadr (car instrs)) (cddr (car instrs))
+                                 stack assumptions nil pflg)
+                                #+acl2-loop-only
                                 (call-stack (cadr (car instrs))
                                             (cddr (car instrs))
                                             stack

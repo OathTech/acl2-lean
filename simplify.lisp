@@ -7919,7 +7919,8 @@
                       ; rollback re-clausify below and every other clausify in
                       ; the prover stay untraced.
                       #-acl2-loop-only
-                      (let ((*clausify-trace* t))
+                      (let ((*clausify-trace* t)
+                            (*structured-clausify-call-pending* nil))
                         (pstk
                          (clausify val
                                    (convert-clause-to-assumptions
