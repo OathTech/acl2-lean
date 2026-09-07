@@ -54,7 +54,7 @@
 ; TRACE-LOG[infra/if-type-query-owner]: only the current ordinary
 ; assume-true-false call owns an IF marker's recursive query evidence.
 #-acl2-loop-only
-(defvar *structured-if-query-active* nil)
+(defvar *structured-if-query-basis* nil)
 #-acl2-loop-only
 (defvar *structured-fc-suspended-reliefs* (make-hash-table :test 'eq))
 #-acl2-loop-only
@@ -17916,10 +17916,9 @@ its attachment is ignored during proofs"))))
                                      (append
                                       (list :runes (all-runes-in-ttree ts-ttree nil)
                                             :parents (tagged-objects 'pt ts-ttree))
-                                      (and *structured-if-query-active*
+                                      (and *structured-if-query-basis*
                                            (list :type-set-basis
-                                                 (list :type-alist type-alist
-                                                       :queries (reverse (car *structured-ts-queries*))))))))
+                                                 *structured-if-query-basis*)))))
            (cdr *structured-rewrite-log*)))
    #+acl2-loop-only nil
   (cond
@@ -18122,7 +18121,7 @@ its attachment is ignored during proofs"))))
            (type #.*fixnum-type* step-limit))
   ; TRACE-LOG[infra/if-type-query-isolation]: nested IF rewrites cannot
   ; inherit another IF's query evidence, including the heavy-linear arm.
-  (let (#-acl2-loop-only (*structured-if-query-active* nil))
+  (let (#-acl2-loop-only (*structured-if-query-basis* nil))
   (the-mv
    3
    #.*fixnum-type*
@@ -18251,10 +18250,8 @@ its attachment is ignored during proofs"))))
        ; TRACE-LOG[infra/if-type-query-scope]: collect the recursive calls
        ; actually executed by this assume-true-false. The marker snapshots
        ; them before either branch is rewritten; no query is rerun.
-       (let* (#-acl2-loop-only
-              (*structured-ts-queries* (and (consp *structured-rewrite-log*) (list nil)))
-              #-acl2-loop-only
-              (*structured-if-query-active* (consp *structured-ts-queries*)))
+       (let (#-acl2-loop-only
+             (*structured-ts-queries* (and (consp *structured-rewrite-log*) (list nil))))
         (mv-let (must-be-true
                   must-be-false
                   true-type-alist
@@ -18320,13 +18317,23 @@ its attachment is ignored during proofs"))))
                                 (access rewrite-constant rcnst
                                         :current-enabled-structure)
                                 wrld nil nil nil))
-           (rewrite-entry
-            (rewrite-if-finish test unrewritten-test left right alist
-                               swapped-p
-                               must-be-true must-be-false
-                               true-type-alist false-type-alist
-                               simplify-clause-pot-lst simplify-clause-pot-lst
-                               ts-ttree))))))))))
+           ; TRACE-LOG[infra/if-type-query-snapshot]: stop collecting before
+           ; rewriting either branch, so ordinary hypothesis observers there
+           ; keep their own query cells. The IF marker receives only this call.
+           (let* (#-acl2-loop-only
+                  (*structured-if-query-basis*
+                   (and *structured-ts-queries*
+                        (list :type-alist type-alist
+                              :queries (reverse (car *structured-ts-queries*)))))
+                  #-acl2-loop-only
+                  (*structured-ts-queries* nil))
+             (rewrite-entry
+              (rewrite-if-finish test unrewritten-test left right alist
+                                 swapped-p
+                                 must-be-true must-be-false
+                                 true-type-alist false-type-alist
+                                 simplify-clause-pot-lst simplify-clause-pot-lst
+                                 ts-ttree)))))))))))
 
 
 (defun rewrite-args (args alist bkptr rewritten-args-rev
