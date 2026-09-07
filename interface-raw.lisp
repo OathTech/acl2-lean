@@ -8599,6 +8599,10 @@
   nil)
 
 (defun-one-output ld-alist-raw (standard-oi ld-skip-proofsp ld-error-action)
+; TRACE-LOG[suppress/bootstrap-ld-print]: preserve structured proof streams
+; across bootstrap LD calls; these flags affect printing only.
+  (let ((structuredp (eq (f-get-global 'raw-proof-format *the-live-state*)
+                         :structured)))
   `((standard-oi . ,standard-oi)
     (standard-co . ,*standard-co*)
     (proofs-co . ,*standard-co*)
@@ -8606,12 +8610,12 @@
     (useless-runes . nil)
     (ld-skip-proofsp . ,ld-skip-proofsp)
     (ld-redefinition-action . nil)
-    (ld-prompt . ,(if ld-skip-proofsp nil t))
+    (ld-prompt . ,(if (or structuredp ld-skip-proofsp) nil t))
     (ld-missing-input-ok . nil)
     (ld-always-skip-top-level-locals . nil)
     (ld-pre-eval-filter . :all)
-    (ld-pre-eval-print . ,(if ld-skip-proofsp nil t))
-    (ld-post-eval-print . :command-conventions)
+    (ld-pre-eval-print . ,(if (or structuredp ld-skip-proofsp) nil t))
+    (ld-post-eval-print . ,(if structuredp nil :command-conventions))
     (ld-evisc-tuple .
 
 ; In order to avoid printing huge forms during initialization when ld-ing files
@@ -8621,8 +8625,8 @@
     (ld-error-triples . t)
     (ld-error-action . ,ld-error-action)
     (ld-query-control-alist . t)
-    (ld-verbose . t)
-    (ld-user-stobjs-modified-warning . nil)))
+    (ld-verbose . ,(not structuredp))
+    (ld-user-stobjs-modified-warning . nil))))
 
 (defun enter-boot-strap-pass-2 ()
 ; We must provide set-w a frame on which to push its undo forms.
@@ -9793,6 +9797,11 @@
           (state *the-live-state*)
           pass-2-alist)
      (enter-boot-strap-mode system-books-dir (get-os))
+     ; TRACE-LOG[infra/bootstrap-proof-stream]: opt in after the global reset
+     ; while initialize-acl2 NIL proves the unchanged bootstrap sources.
+     (when (and (null pass-2-ld-skip-proofsp)
+                (equal (getenv$-raw "ACL2LEAN_BOOTSTRAP_TRACE") "1"))
+       (set-raw-proof-format-fn :structured state))
      (dolist
        (fl *acl2-files*)
        (when (not (or (equal fl "boot-strap-pass-2-a")
