@@ -8526,6 +8526,10 @@
                  (ok-to-force (ok-to-force rcnst))
                  (ens (access rewrite-constant rcnst
                               :current-enabled-structure)))
+; TRACE-LOG[infra/linear-numeric-query-scope]: observe only the two numeric assumption queries actually executed for this selected equation.
+             (let (#-acl2-loop-only
+                   (*structured-ts-queries*
+                    (and (consp *structured-rewrite-log*) (list nil))))
              (mv-let (flag1 ttree2)
                (add-linear-assumption derived-equation
                                       (mcons-term* 'acl2-numberp lhs)
@@ -8548,6 +8552,15 @@
 ; (acl2-numberp lhs) was indeterminate with forcing off, but now we do not set
 ; to 0 in that case (flag1 = :failed); similarly for rhs.
 
+; TRACE-LOG[infra/linear-numeric-query-result]: retain the original operands and query context before numeric completion, and end observation before recursive equation processing.
+                (let (#-acl2-loop-only
+                      (structured-numeric-basis
+                       (and *structured-ts-queries*
+                            (list :operands (list lhs rhs)
+                                  :type-alist type-alist
+                                  :queries (reverse (car *structured-ts-queries*)))))
+                      #-acl2-loop-only
+                      (*structured-ts-queries* nil))
                 (let* ((lhs (if (eq flag1 :known-false) *0* lhs))
                        (rhs (if (eq flag2 :known-false) *0* rhs))
                        (new-lit (dumb-negate-lit (mcons-term* 'equal lhs rhs)))
@@ -8600,6 +8613,7 @@
                                    :new-literal new-lit
                                    :output-clause next-clause
                                    :numeric-flags (list flag1 flag2)
+                                   :numeric-basis structured-numeric-basis
                                    :poly-pairs (tagged-objects
                                                 'find-equational-poly ttree1)
                                    :assumptions (tagged-objects
@@ -8625,7 +8639,7 @@
 ; this same inequality.  Recall that ttree3 includes ttree1.
 
                                      ttree1))
-                                   ttree)))))))))))))
+                                   ttree)))))))))))))))
 
 ; We are finally ready to begin the final assault on simplify-clause.
 
