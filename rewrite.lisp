@@ -129,6 +129,11 @@
 #-acl2-loop-only
 (defvar *structured-clausify-call-pending* nil)
 
+; TRACE-LOG[infra/clausify-reductions]: collect selected clause reductions
+; locally within one Satriani invocation or general subsumption pass.
+#-acl2-loop-only
+(defvar *structured-clausify-reductions* nil)
+
 ; TRACE-LOG[infra/clausify-trace-path]: the assumption path ABOVE the
 ; :ignore-when-converting-to-clause marker (the tests split so far within the
 ; literal being clausified), outermost-first, as (:t . test) / (:f . test)
@@ -4270,17 +4275,43 @@ its attachment is ignored during proofs"))))
     nil)
    (t (let ((cl3 (quick-and-dirty-subsumption-replacement-step1 cl1 (car lst))))
         (cond
-         ((eq cl3 'subsumed1) 'subsumed1)
+         ((eq cl3 'subsumed1)
+          (prog2$
+           ; TRACE-LOG[infra/satriani-subsumed-new]: retain the actual clause
+           ; that makes this newly generated clause unnecessary.
+           #-acl2-loop-only
+           (when *clausify-trace*
+             (push (list :kind 'subsumed-new :before cl1 :after (car lst))
+                   *structured-clausify-reductions*))
+           #+acl2-loop-only nil
+           'subsumed1))
          (t (let ((ans
                    (quick-and-dirty-subsumption-replacement-step cl1
                                                                  (cdr lst))))
               (cond
                ((eq cl3 'subsumed2)
-                ans)
+                (prog2$
+                 ; TRACE-LOG[infra/satriani-subsumed-old]: retain deletion of
+                 ; this accumulated clause, unless the recursive result
+                 ; discarded the new clause and cancels all such changes.
+                 #-acl2-loop-only
+                 (when (and *clausify-trace* (not (eq ans 'subsumed1)))
+                   (push (list :kind 'subsumed-old :before (car lst) :after cl1)
+                         *structured-clausify-reductions*))
+                 #+acl2-loop-only nil
+                 ans))
                ((eq ans 'subsumed1) ans)
                ((null cl3)
                 (cons (car lst) ans))
-               (t (cons cl3 ans))))))))))
+               (t (prog2$
+                   ; TRACE-LOG[infra/satriani-replaced-old]: retain the actual
+                   ; replacement clause returned by the selected step.
+                   #-acl2-loop-only
+                   (when *clausify-trace*
+                     (push (list :kind 'replaced :before (car lst) :after cl3)
+                           *structured-clausify-reductions*))
+                   #+acl2-loop-only nil
+                   (cons cl3 ans)))))))))))
 
 (defstub quick-and-dirty-srs (cl1 ac) t)
 
@@ -4305,21 +4336,25 @@ its attachment is ignored during proofs"))))
     (let ((cl1 (convert-assumptions-to-clause-segment assumptions cl nil)))
       (cond
        ((quick-and-dirty-srs cl1 ac)
-        (let ((ans (quick-and-dirty-subsumption-replacement-step cl1 ac)))
+        (let* (
+               ; TRACE-LOG[infra/satriani-reduction-scope]: isolate the
+               ; selected reduction history of this accumulator update.
+               #-acl2-loop-only (*structured-clausify-reductions* nil)
+               (ans (quick-and-dirty-subsumption-replacement-step cl1 ac)))
           (prog2$
            ; TRACE-LOG[emit/if-interp/satriani-fired]: fired-marker — the
            ; Satriani hack RESHAPED the accumulating clause set (dropped the
            ; new segment as subsumed, or deleted/replaced accumulated ones).
            ; The step re-conses even when it changes nothing, so change is
-           ; detected by EQUAL. The replay hard-fails on this marker rather
-           ; than mis-attributing a reshaped segment set
-           ; (docs/notes/2026-07-03_branch-split-spine.md).
+           ; detected by EQUAL. Selected reductions retain the exact
+           ; segment-to-continuation link.
            #-acl2-loop-only
            (when (or (eq ans 'subsumed1) (not (equal ans ac)))
              (clausify-trace-emit
               (list :clausify-satriani
                     :origin 'if-interp/satriani-fired :equiv 'equal
-                    :which (if (eq ans 'subsumed1) 'subsumed1 'replaced))
+                    :which (if (eq ans 'subsumed1) 'subsumed1 'replaced)
+                    :reductions (reverse *structured-clausify-reductions*))
               pflg))
            #+acl2-loop-only nil
            (cond ((eq ans 'subsumed1) ac)
@@ -5013,16 +5048,36 @@ its attachment is ignored during proofs"))))
                            (store-clause (car todo) done-tree)
                            again-flg))
                          ((eq x 'subsumed)
-                          (subsumption-replacement-loop
-                           (cdr todo)
-                           (merge-extra-info-lits (car todo) cl0 done-tree)
-                           again-flg))
-                         (t (subsumption-replacement-loop
-                             (cdr todo)
-                             (store-clause (remove-one-complement (car x)
-                                                                  (car todo))
-                                           done-tree)
-                             t)))))))
+                          (prog2$
+                           ; TRACE-LOG[infra/subsumption-selected-clause]:
+                           ; retain the selected subsumer before recursion.
+                           #-acl2-loop-only
+                           (when *clausify-trace*
+                             (push (list :kind 'subsumed :before (car todo)
+                                         :after cl0)
+                                   *structured-clausify-reductions*))
+                           #+acl2-loop-only nil
+                           (subsumption-replacement-loop
+                            (cdr todo)
+                            (merge-extra-info-lits (car todo) cl0 done-tree)
+                            again-flg)))
+                         (t
+                          ; TRACE-LOG[infra/subsumption-selected-replacement]:
+                          ; retain the exact result of the selected removal;
+                          ; the logical return and recursive inputs are unchanged.
+                          (let ((replacement
+                                 (remove-one-complement (car x) (car todo))))
+                            (prog2$
+                             #-acl2-loop-only
+                             (when *clausify-trace*
+                               (push (list :kind 'replaced :before (car todo)
+                                           :after replacement)
+                                     *structured-clausify-reductions*))
+                             #+acl2-loop-only nil
+                             (subsumption-replacement-loop
+                              (cdr todo)
+                              (store-clause replacement done-tree)
+                              t)))))))))
 
 ; Rockwell Addition: Same old lambda-exp arg.  Clausify is called in
 ; many places and now has a new last arg.  This will show up many
@@ -5059,7 +5114,11 @@ its attachment is ignored during proofs"))))
                   (strip-branches term assumptions lambda-exp))))
     (cond
      ((or (null sr-limit) (<= (length clauses) sr-limit))
-      (let ((ans (pstk
+      (let* (
+             ; TRACE-LOG[infra/subsumption-reduction-scope]: isolate the
+             ; selected history across all recursive cleanup iterations.
+             #-acl2-loop-only (*structured-clausify-reductions* nil)
+             (ans (pstk
                   (subsumption-replacement-loop
                    (merge-sort-length
                     clauses)
@@ -5069,15 +5128,14 @@ its attachment is ignored during proofs"))))
          ; TRACE-LOG[emit/clausify/subsumption-loop-fired]: fired-marker — the
          ; general subsumption-replacement-loop CHANGED the clause set beyond
          ; reordering (merge-sort-length reorders; content is compared as a
-         ; set). The replay hard-fails on this marker rather than
-         ; mis-attributing a reshaped segment set
-         ; (docs/notes/2026-07-03_branch-split-spine.md).
+         ; set). Selected reductions retain the segment-to-continuation link.
          #-acl2-loop-only
          (unless (and (subsetp-equal ans clauses)
                       (subsetp-equal clauses ans))
            (clausify-trace-emit
             (list :clausify-subsumption-loop
-                  :origin 'clausify/subsumption-loop-fired :equiv 'equal)
+                  :origin 'clausify/subsumption-loop-fired :equiv 'equal
+                  :reductions (reverse *structured-clausify-reductions*))
             nil))
          #+acl2-loop-only nil
          ans)))

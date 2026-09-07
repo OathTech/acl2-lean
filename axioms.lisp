@@ -14391,6 +14391,9 @@ evaluated.  See :DOC certify-book, in particular, the discussion about ``Step
     if-interp ; *structured-rewrite-log* (clausify-trace)
     call-stack if-interp-assumed-value1 if-interp-assumed-value2 ; *structured-clausify-call-*
     if-interp-add-clause ; *structured-rewrite-log* (clausify-trace)
+    ; TRACE-LOG[infra/clausify-reduction-program-fns]: register raw selected
+    ; reduction observers; their logical return values are unchanged.
+    quick-and-dirty-subsumption-replacement-step subsumption-replacement-loop
     strip-branches ; *structured-rewrite-log* (clausify-trace, emit/strip-branches/and-shape)
     scons-term ; *structured-rewrite-log*
     ; TRACE-LOG[infra/linear-insertion-raw-code]: register the equation-insertion logger's raw-only body.
