@@ -9798,10 +9798,14 @@
           pass-2-alist)
      (enter-boot-strap-mode system-books-dir (get-os))
      ; TRACE-LOG[infra/bootstrap-proof-stream]: opt in after the global reset
-     ; while initialize-acl2 NIL proves the unchanged bootstrap sources.
+     ; while initialize-acl2 NIL proves the unchanged bootstrap sources;
+     ; keep diagnostic errors visible if that initialization fails.
      (when (and (null pass-2-ld-skip-proofsp)
                 (equal (getenv$-raw "ACL2LEAN_BOOTSTRAP_TRACE") "1"))
-       (set-raw-proof-format-fn :structured state))
+       (set-raw-proof-format-fn :structured state)
+       (f-put-global 'inhibit-output-lst
+                     '(proof-tree event summary warning observation)
+                     state))
      (dolist
        (fl *acl2-files*)
        (when (not (or (equal fl "boot-strap-pass-2-a")
