@@ -5319,7 +5319,13 @@ its attachment is ignored during proofs"))))
                  (rewrite-solidify-rec new-bound (fargn eterm 2) type-alist
                                        obj geneqv ens wrld ttree
                                        pot-lst pt))))
-             (t (mv-let (ts ts-ttree)
+             (t
+                ; TRACE-LOG[infra/ta-singleton-solidify-scope]: collect only
+                ; the direct assoc-type-alist route, excluding recomputation.
+                (let (#-acl2-loop-only
+                      (*structured-ta-singleton-selected*
+                       (and (eq obj '?) (list term))))
+                 (mv-let (ts ts-ttree)
 
 ; See the comment just after rewrite-solidify for some historical waffling.
 
@@ -5343,6 +5349,9 @@ its attachment is ignored during proofs"))))
                                            :rune '(:type-alist nil)
                                            :origin 'solidify/type-alist :equiv 'equal
                                            :typeset ts
+                                           ; TRACE-LOG[emit/solidify/type-alist]: diagnostic construction-site evidence for the selected entry; no inferred ancestry.
+                                           :ta-singleton-basis
+                                           (cdr *structured-ta-singleton-selected*)
                                            :lhs term
                                            :rhs solidified-term
                                            :parents (tagged-objects
@@ -5352,7 +5361,7 @@ its attachment is ignored during proofs"))))
                                      (cdr *structured-rewrite-log*)))
                              #+acl2-loop-only nil
                              (mv solidified-term
-                                 solidified-ttree)))))))))))
+                                 solidified-ttree))))))))))))
 
 (defconst *rewrite-equiv-solidify-iteration-bound*
 

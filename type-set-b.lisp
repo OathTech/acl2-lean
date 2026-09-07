@@ -50,6 +50,13 @@
 (defvar *structured-lookup-entry* nil)
 #-acl2-loop-only
 (defvar *structured-lookup-basis* nil)
+; TRACE-LOG[infra/ta-singleton-bases]: diagnostic origin records keyed by the
+; actual newly allocated entry, never by value equality. Reset per stream.
+#-acl2-loop-only
+(defvar *structured-ta-singleton-bases* nil)
+#-acl2-loop-only
+(defvar *structured-ta-singleton-selected* nil)
+
 
 ;; Historical Comment from Ruben Gamboa:
 ;; I changed this value from 7 to 10 to make room for the
@@ -4146,6 +4153,15 @@
               (when (and (consp *structured-comparison-query*)
                          (equal term (car *structured-comparison-query*)))
                 (setf (cadr *structured-comparison-query*) temp))
+              #+acl2-loop-only nil
+              ; TRACE-LOG[infra/ta-singleton-lookup]: attach an origin only for
+              ; the exact entry returned by this direct solidify lookup.
+              #-acl2-loop-only
+              (when (and *structured-ta-singleton-selected*
+                         (equal term (car *structured-ta-singleton-selected*)))
+                (setf (cdr *structured-ta-singleton-selected*)
+                      (and temp *structured-ta-singleton-bases*
+                           (gethash temp *structured-ta-singleton-bases*))))
               #+acl2-loop-only nil
              (if temp
                  (mv (cadr temp) (cddr temp))
@@ -10837,7 +10853,8 @@
                                                             (or (variablep arg1)
                                                                 (assoc-equal arg1
                                                                              type-alist))))
-                                                   (extend-with-proper/improper-cons-ts-tuple
+                                                   (let ((structured-extended
+                                                          (extend-with-proper/improper-cons-ts-tuple
                                                     arg1
                                                     (ts-intersection
                                                      ts1
@@ -10858,7 +10875,23 @@
                                                       (cons-tag-trees ttree xttree))
                                                     force-flg dwp type-alist ancestors
                                                     ens false-type-alist1 w
-                                                    pot-lst pt backchain-limit))
+                                                    pot-lst pt backchain-limit)))
+                                                     (prog2$
+                                                      ; TRACE-LOG[infra/ta-singleton-origin-1]: retain this executed exclusion arm and its actual new head entry without changing the extension.
+                                                      #-acl2-loop-only
+                                                      (when (and *structured-ta-singleton-bases*
+                                                                 (consp *structured-rewrite-log*)
+                                                                 (consp structured-extended)
+                                                                 (not (eq structured-extended false-type-alist1)))
+                                                        (setf (gethash (car structured-extended)
+                                                                       *structured-ta-singleton-bases*)
+                                                              (list :kind :equal-false-singleton
+                                                                    :equality x :side 1
+                                                                    :left arg1 :right arg2
+                                                                    :left-mask ts1 :right-mask ts2
+                                                                    :entry (car structured-extended))))
+                                                      #+acl2-loop-only nil
+                                                      structured-extended)))
                                                   (t false-type-alist1))))
                                            (false-type-alist3
                                             (and (not (eq ignore :fta))
@@ -10873,7 +10906,8 @@
                                                             (or (variablep arg2)
                                                                 (assoc-equal arg2
                                                                              type-alist))))
-                                                   (extend-with-proper/improper-cons-ts-tuple
+                                                   (let ((structured-extended
+                                                          (extend-with-proper/improper-cons-ts-tuple
                                                     arg2
                                                     (ts-intersection
                                                      ts2
@@ -10883,7 +10917,23 @@
                                                       (cons-tag-trees ttree xttree))
                                                     force-flg dwp type-alist ancestors
                                                     ens false-type-alist2 w
-                                                    pot-lst pt backchain-limit))
+                                                    pot-lst pt backchain-limit)))
+                                                     (prog2$
+                                                      ; TRACE-LOG[infra/ta-singleton-origin-2]: retain this executed exclusion arm and its actual new head entry without changing the extension.
+                                                      #-acl2-loop-only
+                                                      (when (and *structured-ta-singleton-bases*
+                                                                 (consp *structured-rewrite-log*)
+                                                                 (consp structured-extended)
+                                                                 (not (eq structured-extended false-type-alist2)))
+                                                        (setf (gethash (car structured-extended)
+                                                                       *structured-ta-singleton-bases*)
+                                                              (list :kind :equal-false-singleton
+                                                                    :equality x :side 2
+                                                                    :left arg1 :right arg2
+                                                                    :left-mask ts1 :right-mask ts2
+                                                                    :entry (car structured-extended))))
+                                                      #+acl2-loop-only nil
+                                                      structured-extended)))
                                                   (t false-type-alist2)))))
                                       (mv-atf xnot-flg nil nil
                                               true-type-alist3 false-type-alist3

@@ -5224,6 +5224,9 @@
       (prog2$
        #-acl2-loop-only
        (progn (setq *structured-rewrite-log* (list :active))
+              ; TRACE-LOG[infra/ta-singleton-reset]: entry identities belong
+              ; to one observed proof stream; discard prior diagnostic origins.
+              (setq *structured-ta-singleton-bases* (make-hash-table :test 'eq))
               ; TRACE-LOG[infra/use-instance-substitutions]: scope recorded
               ; translations to this structured stream, including hints
               ; translated before their theorem's first waterfall step.

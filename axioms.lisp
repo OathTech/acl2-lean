@@ -14338,6 +14338,9 @@ evaluated.  See :DOC certify-book, in particular, the discussion about ``Step
     known-whether-nil ; *structured-known-recognizer-basis*
     lookup-hyp ; *structured-lookup-basis*, *structured-lookup-entry*
     type-set-rec ; *structured-recognizer-query*
+    ; TRACE-LOG[infra/ta-singleton-program-fn]: declare raw-only entry-origin
+    ; observation; the logical assume-true-false computation is unchanged.
+    assume-true-false-rec
     ; TRACE-LOG[infra/type-restriction-program-fn]: register raw-only query observation; restriction clauses and logical return values are unchanged.
     type-restriction-segment
     ; TRACE-LOG[infra/comparison-bound-program-fn]: the constant-bound scan
