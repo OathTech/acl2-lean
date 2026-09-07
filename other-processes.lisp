@@ -699,9 +699,23 @@
   (cond
    ((null terms) (mv nil nil nil))
    (t
+; TRACE-LOG[infra/type-restriction-query-scope]: observe the executed destructor type query, with its own child-query collector.
+    (let (#-acl2-loop-only
+          (*structured-ts-queries*
+           (and (consp *structured-rewrite-log*) (list nil))))
     (mv-let
      (ts ttree1)
      (type-set (car terms) nil nil type-alist ens wrld nil nil nil)
+; TRACE-LOG[infra/type-restriction-query-result]: retain this call's result before conversion and stop collection before clausification or recursion.
+     (let (#-acl2-loop-only
+           (structured-restriction-query
+            (and *structured-ts-queries*
+                 (list :term (car terms) :var (car vars)
+                       :input-clause cl :type-alist type-alist
+                       :mask ts :ttree ttree1
+                       :queries (reverse (car *structured-ts-queries*)))))
+           #-acl2-loop-only
+           (*structured-ts-queries* nil))
      (mv-let
       (term ttree1)
       (convert-type-set-to-term (car terms) ts ens wrld ttree1)
@@ -710,6 +724,15 @@
 ; Notice that we obtain the sr-limit from the world; see Warning above.
 
                                (sr-limit wrld))))
+; TRACE-LOG[infra/type-restriction-record]: carry actual type queries and their converted restriction clauses to the enclosing STEP metadata, without changing ACL2's clause or ttree.
+        (progn$
+         #-acl2-loop-only
+         (when structured-restriction-query
+           (push (list :type-restriction
+                       :basis structured-restriction-query
+                       :formula term :clauses clauses :ttree ttree1)
+                 (cdr *structured-rewrite-log*)))
+         #+acl2-loop-only nil
         (mv-let
          (lits restricted-vars ttree)
          (type-restriction-segment cl
@@ -748,7 +771,7 @@
 ; It is always sound to exit here, giving ourselves no additional
 ; assumptions.
 
-                (mv lits restricted-vars ttree))))))))))
+                (mv lits restricted-vars ttree)))))))))))))
 
 (mutual-recursion
 

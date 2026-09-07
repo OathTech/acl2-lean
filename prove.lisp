@@ -2718,6 +2718,18 @@
                          (setf (cdr *structured-rewrite-log*) nil))))
             #+acl2-loop-only
             (rewrites nil)
+; TRACE-LOG[infra/type-restriction-step-routing]: keep generalization query records in STEP metadata, separate from literal rewrite events, in their actual execution order.
+            #-acl2-loop-only
+            (type-restrictions
+             (remove-if-not (lambda (event)
+                              (eq (car event) :type-restriction))
+                            rewrites))
+            #+acl2-loop-only
+            (type-restrictions nil)
+            #-acl2-loop-only
+            (rewrites (remove-if (lambda (event)
+                                   (eq (car event) :type-restriction))
+                                 rewrites))
 
 ; Extract processor-specific details from the ttree.
 
@@ -2728,7 +2740,7 @@
             (fert-equiv (tagged-objects 'equiv ttree))
             (gen-terms (tagged-objects 'terms ttree))
             (gen-vars (tagged-objects 'variables ttree))
-            (details
+            (details0
              (cond
               (elim-seq
                (msg " :ELIMSEQUENCE ~x0 :ELIMVARS ~x1"
@@ -2779,7 +2791,11 @@
                (msg " :ABORT-CAUSE ~x0 :POOLNAME ~x1"
                     (tagged-object 'abort-cause ttree)
                     (pool-lst (cdr (access prove-spec-var pspv :pool)))))
-              (t ""))))
+              (t "")))
+            (details (if type-restrictions
+                         (msg "~@0 :TYPE-RESTRICTIONS ~x1"
+                              details0 type-restrictions)
+                       details0)))
        (fms "(:STEP :CLAUSEID ~x0 :PROCESSOR ~x1 :RESULT ~x2 :RUNES ~x3~@4~@5~@6~@7)~%"
             (list (cons #\0 cl-id-str)
                   (cons #\1 processor)
