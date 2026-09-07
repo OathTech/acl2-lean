@@ -37,6 +37,10 @@
 (defvar *structured-comparison-query* nil)
 #-acl2-loop-only
 (defvar *structured-known-comparison-basis* nil)
+; TRACE-LOG[infra/known-type-query-basis]: the completed original type-set
+; call and its input context, published for the immediate hypothesis consumer.
+#-acl2-loop-only
+(defvar *structured-known-type-set-basis* nil)
 ; TRACE-LOG[infra/comparison-bound-basis]: selected type-alist entry of the
 ; active constant-bound scan; the actual successful arm writes this cell.
 #-acl2-loop-only
@@ -8462,6 +8466,21 @@
 ; derivation of that result.  If neither is derived, then ttree1 is
 ; nil and we can ignore it.
 
+           (progn$
+            ; TRACE-LOG[infra/type-query-if-decision]: observe the actual IF
+            ; decision and branch contexts before executing its selected arms.
+            ; Earlier children belong to the decision; subsequent children are
+            ; exactly the selected then/else calls, in execution order.
+            #-acl2-loop-only
+            (when *structured-ts-queries*
+              (setf (caddr *structured-ts-queries*)
+                    (list :if :must-be-true must-be-true
+                          :must-be-false must-be-false
+                          :decision-query-count (length (car *structured-ts-queries*))
+                          :decision-ttree ttree1
+                          :true-type-alist true-type-alist
+                          :false-type-alist false-type-alist)))
+            #+acl2-loop-only nil
            (cond (must-be-true
                   (cond (must-be-false
 
@@ -8531,7 +8550,7 @@
                                                   pot-lst pt
                                                   backchain-limit)
                                     (mv (ts-union ts1 ts2)
-                                        ttree))))))
+                                        ttree)))))))
           (type-set-finish x ts0 ttree0 ts1 ttree1 type-alist)))
         ((member-eq fn *expandable-boot-strap-non-rec-fns*)
 
@@ -12820,7 +12839,18 @@
   ; publish this call's root-recognizer basis or the root IF's actual mask
   ; and addressed branch verdicts on every return path. The IF collector
   ; uses the same initial type-alist and preserves pruned branches as ts=0.
-  (let (#-acl2-loop-only
+  (let* (; TRACE-LOG[infra/known-executed-query-scope]: isolate the original
+         ; call's query tree; append it back to an enclosing observer after
+         ; publication. Diagnostic re-queries below have no access to this cell.
+         #-acl2-loop-only
+         (structured-parent-known-query *structured-ts-queries*)
+         #-acl2-loop-only
+         (*structured-ts-queries*
+          (and (or structured-parent-known-query
+                   (and (boundp '*structured-rewrite-log*)
+                        (consp (symbol-value '*structured-rewrite-log*))))
+               (list nil)))
+        #-acl2-loop-only
         (*structured-recognizer-query*
          (and (boundp '*structured-rewrite-log*)
               (consp (symbol-value '*structured-rewrite-log*))
@@ -12839,22 +12869,31 @@
             #-acl2-loop-only
             (setq *structured-known-recognizer-basis* nil
                   *structured-known-if-basis* nil
-                  *structured-known-comparison-basis* nil)
+                  *structured-known-comparison-basis* nil
+                  *structured-known-type-set-basis* nil)
             #+acl2-loop-only nil
             (mv t (equal x *nil*) ttree)))
           (t (mv-let (ts ttree1)
                (type-set x force-flg dwp type-alist ens wrld ttree nil nil)
                (progn$
                 #-acl2-loop-only
-                (let* ((root-recognizer-basis
-                        (cdr *structured-recognizer-query*))
+                (let* ((executed-queries
+                        (and *structured-ts-queries*
+                             (reverse (car *structured-ts-queries*))))
+                       (root-query
+                        (and (null (cdr executed-queries))
+                             (car executed-queries)))
+                       (root-recognizer-basis
+                        (if root-query (getf root-query :recognizer)
+                          (cdr *structured-recognizer-query*)))
                        (root-if-basis
                         (and (consp *structured-recognizer-query*)
                              (nvariablep x)
                              (not (fquotep x))
                              (eq (ffn-symb x) 'if)
                              (list ts
-                                   (let ((*structured-recognizer-query* nil))
+                                   (let ((*structured-recognizer-query* nil)
+                                         (*structured-ts-queries* nil))
                                      (tp-collect-if-leaves1
                                       x nil type-alist nil ens wrld))))))
                   ; Publish after the collector, so nested diagnostic
@@ -12865,7 +12904,16 @@
                         *structured-known-comparison-basis*
                         (and (consp *structured-comparison-query*)
                              (list :result ts :route
-                                   (caddr *structured-comparison-query*)))))
+                                   (if root-query (getf root-query :comparison)
+                                     (caddr *structured-comparison-query*))))
+                        *structured-known-type-set-basis*
+                        (and *structured-ts-queries*
+                             (list :type-alist type-alist
+                                   :queries executed-queries)))
+                  (when structured-parent-known-query
+                    (setf (car structured-parent-known-query)
+                          (append (car *structured-ts-queries*)
+                                  (car structured-parent-known-query)))))
                 #+acl2-loop-only nil
                 (cond ((ts= ts *ts-nil*)
                        (mv t t ttree1))

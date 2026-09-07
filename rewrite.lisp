@@ -19499,6 +19499,8 @@ its attachment is ignored during proofs"))))
                                                  *structured-known-if-basis*
                                                  :comparison-basis
                                                  *structured-known-comparison-basis*
+                                                 :type-set-basis
+                                                 *structured-known-type-set-basis*
                                                  :ta-runes
                                                  (all-runes-in-ttree nilp-ttree nil)
                                                  :parents
