@@ -32,6 +32,16 @@
 (defvar *structured-rewrite-log* nil
   "When non-nil, accumulates rewrite steps for structured proof output.")
 
+; TRACE-LOG[infra/substitution-construction-observers]: scoped observers of
+; original subst-equiv-expr calls and clause rebuilding, active only inside
+; a recorded selected clause edit. They do not invoke substitution again.
+#-acl2-loop-only
+(defvar *structured-subst-expressions* nil)
+#-acl2-loop-only
+(defvar *structured-clause-constructions* nil)
+#-acl2-loop-only
+(defvar *structured-clause-cleanup* nil)
+
 ; TRACE-LOG[infra/use-instance-substitutions]: exact successful translated
 ; variable substitutions, keyed by pre-instance formula, source substitution,
 ; and resulting hypothesis. translate-lmi/instance records the actual adjusted
@@ -1958,14 +1968,33 @@ its attachment is ignored during proofs"))))
 
 ; NOTE:  We ignore occurrences of old inside arguments to HIDE.
 
+  ; TRACE-LOG[infra/substitution-expression-scope]: retain the executed
+  ; recursive construction, including the original scons-term call's local
+  ; fold records. Sibling occurrences have distinct child positions.
+  (let* (#-acl2-loop-only
+         (structured-parent-expression *structured-subst-expressions*)
+         #-acl2-loop-only
+         (*structured-subst-expressions*
+          (and structured-parent-expression (list nil nil nil nil))))
+    (mv-let (structured-hit structured-result structured-ttree)
   (cond ((and (equal term old)
               (geneqv-refinementp equiv geneqv wrld))
+         (prog2$
+          #-acl2-loop-only
+          (when *structured-subst-expressions*
+            (setf (cadr *structured-subst-expressions*) :replace))
+          #+acl2-loop-only nil
          (mv t new
-             (push-lemma (geneqv-refinementp equiv geneqv wrld) ttree)))
+             (push-lemma (geneqv-refinementp equiv geneqv wrld) ttree))))
         ((or (variablep term)
              (fquotep term)
              (eq (ffn-symb term) 'hide))
-         (mv nil term ttree))
+         (prog2$
+          #-acl2-loop-only
+          (when *structured-subst-expressions*
+            (setf (cadr *structured-subst-expressions*) :unchanged))
+          #+acl2-loop-only nil
+          (mv nil term ttree)))
         (t (mv-let (hitp1 args ttree)
                    (subst-equiv-expr1-lst equiv new old
                                           (geneqv-lst (ffn-symb term)
@@ -1981,11 +2010,36 @@ its attachment is ignored during proofs"))))
 ; IF's it would be better to special-case the substitution into IF
 ; expressions.
 
-                   (mv-let (hitp2 new-term ttree)
+                   (let* (#-acl2-loop-only
+                          (structured-fold-tail
+                           (and *structured-subst-expressions*
+                                (cdr *structured-rewrite-log*))))
+                    (mv-let (hitp2 new-term ttree)
                            (scons-term (ffn-symb term) args ens wrld state ttree)
+                           (prog2$
+                            #-acl2-loop-only
+                            (when *structured-subst-expressions*
+                              (setf (cadr *structured-subst-expressions*) :application
+                                    (caddr *structured-subst-expressions*)
+                                    (cons (ffn-symb term) args)
+                                    (cadddr *structured-subst-expressions*)
+                                    (reverse (ldiff (cdr *structured-rewrite-log*)
+                                                    structured-fold-tail))))
+                            #+acl2-loop-only nil
                            (mv (or hitp1 hitp2)
                                new-term
-                               ttree))))))
+                               ttree)))))))
+      (progn$
+       #-acl2-loop-only
+       (when structured-parent-expression
+         (push (list :input term :output structured-result
+                     :route (cadr *structured-subst-expressions*)
+                     :assembled (caddr *structured-subst-expressions*)
+                     :folds (cadddr *structured-subst-expressions*)
+                     :children (reverse (car *structured-subst-expressions*)))
+               (car structured-parent-expression)))
+       #+acl2-loop-only nil
+       (mv structured-hit structured-result structured-ttree)))))
 
 (defun subst-equiv-expr1-lst (equiv new old geneqv-lst args ens wrld state ttree)
 

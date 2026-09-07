@@ -14399,6 +14399,9 @@ evaluated.  See :DOC certify-book, in particular, the discussion about ``Step
     ; TRACE-LOG[infra/linear-insertion-raw-code]: register the equation-insertion logger's raw-only body.
     process-equational-polys
     remove-trivial-equivalences-rec ; *structured-rewrite-log*
+    ; TRACE-LOG[infra/substitution-construction-program-fns]: register the
+    ; original-call construction observers; logical results are unchanged.
+    subst-equiv-expr1 subst-equiv-and-maybe-delete-lit
     rewrite ; *structured-rewrite-log*
     rewrite-solidify-rec ; *structured-rewrite-log*
     rewrite-recognizer ; *structured-rewrite-log*

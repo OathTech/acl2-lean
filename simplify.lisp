@@ -6632,6 +6632,10 @@
 ; pt-lst returned would no longer be in 1:1 correspondence with the new
 ; clause.
 
+  ; TRACE-LOG[infra/clause-construction-cleanup]: observe the exact literal
+  ; and tail supplied to this original rebuilding call and its returned
+  ; clause. The owning recursive clause call supplies the source position.
+  (mv-let (structured-clause structured-pts structured-ttree)
   (cond
    ((quotep lit)
     (cond ((equal lit *nil*) (mv cl pt-lst ttree))
@@ -6660,7 +6664,14 @@
             (mv cl pt-lst ttree))
            (t (mv cl
                   (add-literal-and-pt1 cl0 pt cl pt-lst)
-                  ttree)))))))))
+                  ttree))))))))
+    (progn$
+     #-acl2-loop-only
+     (when *structured-clause-cleanup*
+       (setf (car *structured-clause-cleanup*)
+             (list :literal lit :tail cl :result structured-clause)))
+     #+acl2-loop-only nil
+     (mv structured-clause structured-pts structured-ttree))))
 
 (defun add-binding-to-tag-tree (var term ttree)
 
@@ -6688,9 +6699,25 @@
 ; because lits may evaporate upon evaluation or merge with other literals.  We
 ; may also prove the clause.
 
+  ; TRACE-LOG[infra/clause-construction-scope]: each original recursive
+  ; call owns one input literal, its executed expression construction, and
+  ; its final add-literal result. Keep selected-literal deletion explicit.
+  (let* (#-acl2-loop-only
+         (*structured-subst-expressions*
+          (and *structured-clause-constructions* (list nil)))
+         #-acl2-loop-only
+         (*structured-clause-cleanup*
+          (and *structured-clause-constructions* (list nil)))
+         #-acl2-loop-only
+         (structured-clause-action nil))
+    (mv-let (structured-clause structured-pts structured-ttree)
   (cond
    ((null cl) (mv nil nil ttree))
    ((int= n i)
+    (prog2$
+     #-acl2-loop-only
+     (setq structured-clause-action (if delete-flg :delete :retain))
+     #+acl2-loop-only nil
     (mv-let (cl1 pt-lst1 ttree)
             (subst-equiv-and-maybe-delete-lit equiv new old n
                                               (cdr cl) (1+ i)
@@ -6702,8 +6729,11 @@
                              pt-lst1
                              (add-binding-to-tag-tree old new ttree)))
              (t (add-literal-and-pt (car cl) (car pt-lst)
-                                    cl1 pt-lst1 ttree)))))
+                                    cl1 pt-lst1 ttree))))))
    ((dumb-occur old (car cl))
+    (prog2$
+     #-acl2-loop-only (setq structured-clause-action :substitute)
+     #+acl2-loop-only nil
     (mv-let (hitp lit ttree)
             (subst-equiv-expr equiv new old
                               *geneqv-iff*
@@ -6721,8 +6751,11 @@
                                                       delete-flg
                                                       ens wrld state ttree)
                     (add-literal-and-pt lit (car pt-lst)
-                                        cl1 pt-lst1 ttree))))
-   (t (mv-let (cl1 pt-lst1 ttree)
+                                        cl1 pt-lst1 ttree)))))
+   (t (prog2$
+       #-acl2-loop-only (setq structured-clause-action :copy)
+       #+acl2-loop-only nil
+       (mv-let (cl1 pt-lst1 ttree)
               (subst-equiv-and-maybe-delete-lit equiv new old n
                                                 (cdr cl) (1+ i)
                                                 (cdr pt-lst)
@@ -6730,6 +6763,17 @@
                                                 ens wrld state ttree)
               (add-literal-and-pt (car cl) (car pt-lst)
                                   cl1 pt-lst1 ttree)))))
+      (progn$
+       #-acl2-loop-only
+       (when (and cl *structured-clause-constructions*)
+         (push (list :position i :input (car cl)
+                     :action structured-clause-action
+                     :expressions (reverse (car *structured-subst-expressions*))
+                     :cleanup (car *structured-clause-cleanup*)
+                     :output-clause structured-clause)
+               (car *structured-clause-constructions*)))
+       #+acl2-loop-only nil
+       (mv structured-clause structured-pts structured-ttree)))))
 
 (defstub remove-trivial-equivalences-enabled-p () t)
 (defattach remove-trivial-equivalences-enabled-p constant-t-function-arity-0)
@@ -6780,11 +6824,19 @@
     (find-trivial-equivalence remove-flg cl ens wrld avoid-lst)
     (cond
      (lit-position
+      ; TRACE-LOG[infra/selected-clause-construction-owner]: bind one
+      ; observer to this actual edit and attach its complete construction
+      ; to the already emitted selection after the original call returns.
+      (let* (#-acl2-loop-only
+             (*structured-clause-constructions*
+              (and (consp *structured-rewrite-log*) (list nil)))
+             #-acl2-loop-only
+             (structured-selection nil))
       (prog2$
        ; TRACE-LOG[emit/trivial-equiv/branch-subst]: branch-substitution in remove-trivial-equivalences-rec
        #-acl2-loop-only
        (when (consp *structured-rewrite-log*)
-         (push (list :branch-substitution
+         (push (setq structured-selection (list :branch-substitution
                      :origin 'trivial-equiv/branch-subst :equiv 'equal
                      :equivalence equiv
                      :lhs lhs
@@ -6794,7 +6846,7 @@
                            :literal-position lit-position
                            :literal lit
                            :delete-literal
-                           (and remove-flg (eq condition 'disposable))))
+                           (and remove-flg (eq condition 'disposable)))))
                (cdr *structured-rewrite-log*)))
        #+acl2-loop-only nil
       (mv-let (new-cl new-pt-lst ttree)
@@ -6802,10 +6854,18 @@
                equiv rhs lhs lit-position cl 0 pt-lst
                (and remove-flg (eq condition 'disposable))
                ens wrld state ttree)
+              (prog2$
+               #-acl2-loop-only
+               (when structured-selection
+                 (setf (getf (cdr structured-selection) :substitution-basis)
+                       (append (getf (cdr structured-selection) :substitution-basis)
+                               (list :constructions (car *structured-clause-constructions*)
+                                     :result-clause new-cl))))
+               #+acl2-loop-only nil
               (remove-trivial-equivalences-rec new-cl new-pt-lst remove-flg
                                                ens wrld state
                                                ttree t
-                                               (cons lit avoid-lst)))))
+                                               (cons lit avoid-lst)))))))
      (t (mv hitp cl pt-lst ttree)))))
 
 (defun remove-trivial-equivalences (cl pt-lst remove-flg ens wrld state ttree)
