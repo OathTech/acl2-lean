@@ -33,6 +33,10 @@
 
 ; Add-polys
 
+; TRACE-LOG[infra/poly-type-bases]: raw-only construction origins keyed by actual polynomial identity, scoped to one structured stream.
+#-acl2-loop-only
+(defvar *structured-poly-type-bases* nil)
+
 (defun polys-from-type-set (term force-flag dwp type-alist ens wrld ttree)
 
 ; If possible, we create a list of polys based upon the type-set
@@ -47,9 +51,18 @@
 ; however, not be very expensive to wrap the below in a call to
 ; normalize-poly-lst, and thereby avoid the potential error situation.
 
+; TRACE-LOG[infra/poly-type-query-scope]: observe the one executed type-set call that constructs these rows; preserve any enclosing query collector.
+  (let* (#-acl2-loop-only
+         (structured-parent-query *structured-ts-queries*)
+         #-acl2-loop-only
+         (*structured-ts-queries* (if *structured-poly-type-bases*
+                                     (list nil)
+                                   *structured-ts-queries*)))
   (if (good-pot-varp term)
     (mv-let (ts ts-ttree)
       (type-set term force-flag dwp type-alist ens wrld ttree nil nil)
+; TRACE-LOG[infra/poly-type-result]: retain the actual result list without changing its rows or their logical tag trees.
+      (let ((structured-polys
       (cond ((ts-subsetp ts *ts-zero*)
              (list
               ;; 0 <= term
@@ -174,12 +187,28 @@
                                            t
                                            nil))))
             (t
-             nil)))
+             nil))))
+; TRACE-LOG[infra/poly-type-origin]: associate each newly constructed row by cons identity with its executed query and type-alist; forward that query once to its enclosing observer.
+        (prog2$
+         #-acl2-loop-only
+         (when *structured-poly-type-bases*
+           (let ((basis (list :kind :type-set :term term :mask ts
+                              :type-alist type-alist
+                              :queries (reverse (car *structured-ts-queries*))
+                              :ttree ts-ttree)))
+             (dolist (poly structured-polys)
+               (setf (gethash poly *structured-poly-type-bases*) basis))
+             (when structured-parent-query
+               (setf (car structured-parent-query)
+                     (append (car *structured-ts-queries*)
+                             (car structured-parent-query))))))
+         #+acl2-loop-only nil
+         structured-polys)))
     (er hard 'inverse-polys
         "A presumptive pot-label, ~x0,  has turned out to be illegitimate. ~
          If possible, please send a script reproducing this error ~
          to the authors of ACL2."
-        term)))
+        term))))
 
 (defun add-type-set-polys (var-lst new-pot-lst old-pot-lst
                            already-noted-vars

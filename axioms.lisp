@@ -14338,6 +14338,8 @@ evaluated.  See :DOC certify-book, in particular, the discussion about ``Step
     known-whether-nil ; *structured-known-recognizer-basis*
     lookup-hyp ; *structured-lookup-basis*, *structured-lookup-entry*
     type-set-rec ; *structured-recognizer-query*
+    ; TRACE-LOG[infra/poly-type-program-fn]: declare the raw-only polynomial construction observer; the ACL2 logical row computation is unchanged.
+    polys-from-type-set
     ; TRACE-LOG[infra/ta-singleton-program-fn]: declare raw-only entry-origin
     ; observation; the logical assume-true-false computation is unchanged.
     assume-true-false-rec

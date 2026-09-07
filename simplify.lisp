@@ -8616,6 +8616,14 @@
                                    :numeric-basis structured-numeric-basis
                                    :poly-pairs (tagged-objects
                                                 'find-equational-poly ttree1)
+; TRACE-LOG[infra/selected-poly-type-bases]: read only the selected pair's exact construction origins; an unobserved row keeps NIL, never a value-matched substitute.
+                                   :poly-type-basis
+                                   (mapcar (lambda (pair)
+                                             (list (and *structured-poly-type-bases*
+                                                        (gethash (car pair) *structured-poly-type-bases*))
+                                                   (and *structured-poly-type-bases*
+                                                        (gethash (cdr pair) *structured-poly-type-bases*))))
+                                           (tagged-objects 'find-equational-poly ttree1))
                                    :assumptions (tagged-objects
                                                  'assumption ttree3)
                                    :runes (all-runes-in-ttree ttree3 nil))
