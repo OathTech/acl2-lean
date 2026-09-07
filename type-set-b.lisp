@@ -38,7 +38,7 @@
 #-acl2-loop-only
 (defvar *structured-known-comparison-basis* nil)
 ; TRACE-LOG[infra/fc-type-query-tree]: collect the actual recursive type-set
-; calls only inside an FC hypothesis query. Cells retain child order, the
+; calls inside an active hypothesis or IF query. Cells retain child order, the
 ; lookup pair, and the selected local route; no second query is performed.
 #-acl2-loop-only
 (defvar *structured-ts-queries* nil)
@@ -8066,7 +8066,7 @@
 
   ; TRACE-LOG[infra/fc-type-query-scope]: observe this call's returned values
   ; and executed children. Existing known-true observers keep their cells
-  ; outside FC queries, and each nested FC query owns separate cells.
+  ; outside active query scopes, and each recursive query owns separate cells.
   (let* (#-acl2-loop-only
          (structured-parent-query *structured-ts-queries*)
          #-acl2-loop-only

@@ -51,6 +51,10 @@
 (defvar *structured-fc-reliefs* nil)
 #-acl2-loop-only
 (defvar *structured-fc-free-hyp* nil)
+; TRACE-LOG[infra/if-type-query-owner]: only the current ordinary
+; assume-true-false call owns an IF marker's recursive query evidence.
+#-acl2-loop-only
+(defvar *structured-if-query-active* nil)
 #-acl2-loop-only
 (defvar *structured-fc-suspended-reliefs* (make-hash-table :test 'eq))
 #-acl2-loop-only
@@ -17909,8 +17913,13 @@ its attachment is ignored during proofs"))))
                  :test test
                  :unrewritten-test (structured-sublis-var-plain alist unrewritten-test)
                  :justification (and (or must-be-true must-be-false)
-                                     (list :runes (all-runes-in-ttree ts-ttree nil)
-                                           :parents (tagged-objects 'pt ts-ttree))))
+                                     (append
+                                      (list :runes (all-runes-in-ttree ts-ttree nil)
+                                            :parents (tagged-objects 'pt ts-ttree))
+                                      (and *structured-if-query-active*
+                                           (list :type-set-basis
+                                                 (list :type-alist type-alist
+                                                       :queries (reverse (car *structured-ts-queries*))))))))
            (cdr *structured-rewrite-log*)))
    #+acl2-loop-only nil
   (cond
@@ -18111,6 +18120,9 @@ its attachment is ignored during proofs"))))
 
   (declare (type #.*fixnat-type* rdepth)
            (type #.*fixnum-type* step-limit))
+  ; TRACE-LOG[infra/if-type-query-isolation]: nested IF rewrites cannot
+  ; inherit another IF's query evidence, including the heavy-linear arm.
+  (let (#-acl2-loop-only (*structured-if-query-active* nil))
   (the-mv
    3
    #.*fixnum-type*
@@ -18235,7 +18247,15 @@ its attachment is ignored during proofs"))))
                                    true-type-alist false-type-alist
                                    true-pot-lst false-pot-lst
                                    ts-ttree))))
-      (t (mv-let (must-be-true
+      (t
+       ; TRACE-LOG[infra/if-type-query-scope]: collect the recursive calls
+       ; actually executed by this assume-true-false. The marker snapshots
+       ; them before either branch is rewritten; no query is rerun.
+       (let* (#-acl2-loop-only
+              (*structured-ts-queries* (and (consp *structured-rewrite-log*) (list nil)))
+              #-acl2-loop-only
+              (*structured-if-query-active* (consp *structured-ts-queries*)))
+        (mv-let (must-be-true
                   must-be-false
                   true-type-alist
                   false-type-alist
@@ -18306,7 +18326,8 @@ its attachment is ignored during proofs"))))
                                must-be-true must-be-false
                                true-type-alist false-type-alist
                                simplify-clause-pot-lst simplify-clause-pot-lst
-                               ts-ttree))))))))
+                               ts-ttree))))))))))
+
 
 (defun rewrite-args (args alist bkptr rewritten-args-rev
                           deep-pequiv-lst shallow-pequiv-lst
