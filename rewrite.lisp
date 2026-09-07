@@ -5678,8 +5678,24 @@ its attachment is ignored during proofs"))))
               #+acl2-loop-only nil
               (mv test ttree)))
             ((equal left *t*)
+             ; TRACE-LOG[infra/if-boolean-executed-query]: observe the
+             ; range query that justifies IF's Boolean collapse, including
+             ; its checked-context selection, without re-querying the test.
+             (let* (#-acl2-loop-only
+                    (structured-parent-boolean-query *structured-ts-queries*)
+                    #-acl2-loop-only
+                    (*structured-ts-queries*
+                     (and (or structured-parent-boolean-query
+                              (consp *structured-rewrite-log*)) (list nil))))
              (mv-let (ts ts-ttree)
                (type-set test ok-to-force nil type-alist ens wrld ttree nil nil)
+               (progn$
+                #-acl2-loop-only
+                (when structured-parent-boolean-query
+                  (setf (car structured-parent-boolean-query)
+                        (append (car *structured-ts-queries*)
+                                (car structured-parent-boolean-query))))
+                #+acl2-loop-only nil
                (cond ((ts-subsetp ts *ts-boolean*)
                       (progn$
                        ; TRACE-LOG[emit/if1/boolean]: rewrite-step (:if-simplification) in rewrite-if1 [boolean]
@@ -5690,13 +5706,16 @@ its attachment is ignored during proofs"))))
                             :path (structured-rewrite-path) ; congruence position; see structured-rewrite-path
                                      :rune '(:if-simplification nil)
                                      :origin 'if1/boolean :equiv 'equal
+                                     :operand-type-basis
+                                     (list :type-alist type-alist
+                                           :queries (reverse (car *structured-ts-queries*)))
                                      :lhs (if-call test left right swapped-p)
                                      :rhs test)
                                (cdr *structured-rewrite-log*)))
                        #+acl2-loop-only nil
                        (mv test ts-ttree)))
                      (t (rewrite-if11 (if-call test left right swapped-p)
-                                      type-alist geneqv wrld ttree)))))
+                                      type-alist geneqv wrld ttree)))))))
             (t (rewrite-if11 (if-call test left right swapped-p)
                              type-alist geneqv wrld ttree))))
           ((and swapped-p
@@ -5792,8 +5811,30 @@ its attachment is ignored during proofs"))))
 ; arg) to term'.  (We use ``ttree+'' for ttree' below.  Observe that we
 ; sometimes return ttree+ and other times return ttree.)
 
+  ; TRACE-LOG[infra/recognizer-executed-query]: retain the original argument
+  ; query before the legacy diagnostic leaf collector, then restore any
+  ; enclosing observer's execution order. The collector runs outside this cell.
+  (let* (#-acl2-loop-only
+         (structured-parent-recognizer-query *structured-ts-queries*)
+         #-acl2-loop-only
+         (*structured-ts-queries*
+          (and (or structured-parent-recognizer-query
+                   (consp *structured-rewrite-log*)) (list nil))))
   (mv-let (ts ttree+)
           (type-set arg force-flg nil type-alist ens wrld ttree pot-lst pt)
+    (let* (#-acl2-loop-only
+           (structured-argument-basis
+            (and *structured-ts-queries*
+                 (list :type-alist type-alist
+                       :queries (reverse (car *structured-ts-queries*))))))
+    (progn$
+     #-acl2-loop-only
+     (when structured-parent-recognizer-query
+       (setf (car structured-parent-recognizer-query)
+             (append (car *structured-ts-queries*)
+                     (car structured-parent-recognizer-query))))
+     #+acl2-loop-only nil
+    (let (#-acl2-loop-only (*structured-ts-queries* nil))
     (cond
      ((ts-intersectp ts (access recognizer-tuple recog-tuple :true-ts))
       (cond ((ts-intersectp ts (access recognizer-tuple recog-tuple :false-ts))
@@ -5818,6 +5859,7 @@ its attachment is ignored during proofs"))))
                                   (access recognizer-tuple recog-tuple :fn)
                                   arg)
                             :rhs *t*
+                            :operand-type-basis structured-argument-basis
                             :typeset ts
                             :truets (access recognizer-tuple recog-tuple :true-ts)
                             ; fork-batch item 2 (2026-08-06): the FALSE
@@ -5870,7 +5912,8 @@ its attachment is ignored during proofs"))))
                            (access recognizer-tuple recog-tuple :fn)
                            arg)
                      :rhs *nil*
-                     :typeset ts
+                     :operand-type-basis structured-argument-basis
+                            :typeset ts
                      :truets (access recognizer-tuple recog-tuple :true-ts)
                      ; fork-batch item 2: the tuple completion (see the
                      ; recognizer/true twin above).
@@ -5885,7 +5928,7 @@ its attachment is ignored during proofs"))))
        #+acl2-loop-only nil
        (mv *nil*
            (push-lemma (access recognizer-tuple recog-tuple :rune)
-                       ttree+)))))))
+                       ttree+)))))))))))
 
 ; In a departure from Nqthm, we use a lexicographic order on lists of
 ; terms for the loop-stopping algorithm.  This change was motivated by
