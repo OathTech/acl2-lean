@@ -18635,9 +18635,7 @@ its attachment is ignored during proofs"))))
                               :lhs (fcons-term* 'equal lhs rhs)
                               :rhs *nil*
                               :lhs-ts ts-lhs
-                              :rhs-ts ts-rhs
-                              ; TRACE-LOG[emit/equal/type-set-nil]: retain the two executed operand query derivations.
-                              :operand-type-basis structured-equality-basis)
+                              :rhs-ts ts-rhs)
                         (cdr *structured-rewrite-log*)))
                 #+acl2-loop-only nil
                 (mv step-limit *nil* ttree-equality)))
