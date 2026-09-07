@@ -12031,21 +12031,29 @@
          (merge-sort-symbol< vars)
          (merge-sort-symbol< un-mentioned-vars)
          (untranslate formula t wrld)))
-      (t (progn$
+      (t (let ((instance
+                ; TRACE-LOG[infra/use-instance-folds]: observe the single
+                ; actual substitution call, including its cons-term folds.
+                ; Logical expansion is the original sublis-var call.
+                (structured-sublis-fold-scope
+                 #-acl2-loop-only *structured-use-instances*
+                 #+acl2-loop-only nil
+                 (sublis-var alist formula))))
+           (progn$
           ; TRACE-LOG[infra/use-instance-substitutions]: retain the alist AFTER
           ; ACL2's translation and package-variable adjustment, without
           ; changing the instance, its constraints, or any return value.
           #-acl2-loop-only
           (when *structured-use-instances*
-            (setf (gethash (list formula substn (sublis-var alist formula))
+            (setf (gethash (list formula substn instance)
                            *structured-use-instances*)
-                  alist))
+                  (cons alist (reverse *structured-sublis-fold-basis*))))
           #+acl2-loop-only nil
-          (value@par (list (sublis-var alist formula)
+          (value@par (list instance
                            constraints
                            event-names
                            new-entries
-                           origins))))))))
+                           origins)))))))))
 
 (defun fn-subst-free-vars (alist)
   (cond ((endp alist) nil)

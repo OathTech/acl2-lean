@@ -707,7 +707,7 @@
 ; inverse matching: absence is an instrumentation error. Other LMI classes
 ; retain their source record and their existing replay scope.
 #-acl2-loop-only
-(defun structured-use-lmi-list (lmis hyps wrld)
+(defun structured-use-lmi-list (lmis hyps wrld &optional folds-p)
   (unless (= (length lmis) (length hyps))
     (error "Structured USE: source LMI/hypothesis length mismatch"))
   (loop for lmi in lmis
@@ -719,13 +719,16 @@
                    (raw-subst (cddr lmi))
                    (substn (if (eq (car raw-subst) :extra-bindings-ok)
                                (cdr raw-subst) raw-subst)))
-              (multiple-value-bind (alist present)
+              (multiple-value-bind (record present)
                   (gethash (list base substn hyp) *structured-use-instances*)
                 (unless present
                   (error "Structured USE: no recorded translated substitution for ~S" lmi))
-                (list* :instance (cadr lmi)
-                       (loop for pair in alist collect (list (car pair) (cdr pair))))))
-          lmi)))
+                (if folds-p
+                    (cdr record)
+                  (list* :instance (cadr lmi)
+                         (loop for pair in (car record)
+                               collect (list (car pair) (cdr pair)))))))
+          (if folds-p nil lmi))))
 
 (defun apply-use-hint-clauses (temp clauses pspv wrld state step-limit)
 
@@ -796,6 +799,7 @@
                    :hyps hyps
                    :lmi-lst (cadr temp)
                    :translated-lmi-lst (structured-use-lmi-list (cadr temp) hyps wrld)
+                   :instance-folds (structured-use-lmi-list (cadr temp) hyps wrld t)
                    :constraint-cl constraint-cl
                    :application-clauses A)
              (cdr *structured-rewrite-log*)))

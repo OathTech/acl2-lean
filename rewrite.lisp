@@ -35,7 +35,8 @@
 ; TRACE-LOG[infra/use-instance-substitutions]: exact successful translated
 ; variable substitutions, keyed by pre-instance formula, source substitution,
 ; and resulting hypothesis. translate-lmi/instance records the actual adjusted
-; alist; apply-use-hint-clauses emits it with the matching source LMI.
+; alist and actual cons-term folds; apply-use-hint-clauses emits them with
+; the matching source LMI. Each value is (alist . folds).
 #-acl2-loop-only
 (defvar *structured-use-instances* nil)
 
