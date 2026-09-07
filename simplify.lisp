@@ -1036,6 +1036,10 @@
 ; function (given its arguments) is independent of the shape of the
 ; record.
 
+  ; TRACE-LOG[infra/fc-suspended-reliefs]: preserve the executed prefix on
+  ; the returned activation, including ACL2's identity-preserving fast path.
+  (let ((structured-suspended
+
   (cond ((equal unify-subst (access fc-activation act :unify-subst))
 
          (cond ((and (equal hyps (access fc-activation act :hyps))
@@ -1059,8 +1063,14 @@
                  :inst-hyp inst-hyp
                  :hyps hyps
                  :unify-subst unify-subst
-                 :ttree ttree))))
-
+                 :ttree ttree)))))
+    (progn$
+     #-acl2-loop-only
+     (when (consp *structured-rewrite-log*)
+       (setf (gethash structured-suspended *structured-fc-suspended-reliefs*)
+             (copy-tree *structured-fc-reliefs*)))
+     #+acl2-loop-only nil
+     structured-suspended)))
 
 
 (defun prettyify-fc-activation (act level)
@@ -1617,7 +1627,11 @@
                 (when (and (consp *structured-rewrite-log*)
                            *structured-fc-rule-basis*)
                   (setf (gethash fcd *structured-fc-derivation-rules*)
-                        (copy-tree *structured-fc-rule-basis*)))
+                        (copy-tree *structured-fc-rule-basis*))
+                  ; TRACE-LOG[infra/fc-created-reliefs]: freeze the actual
+                  ; path in hypothesis order on the newly created object.
+                  (setf (gethash fcd *structured-fc-derivation-reliefs*)
+                        (copy-tree (reverse *structured-fc-reliefs*))))
                 #+acl2-loop-only nil
                 (add-fc-derivations rune (cdr concls) unify-subst inst-trigger
                                    fc-round ens wrld state ttree
@@ -2952,6 +2966,9 @@
 ; been tagged as using the first binding (as now stored in the flag oncep1) or
 ; if this hyp is to be forced or split upon we don't also suspend it.
 
+                  ; TRACE-LOG[infra/fc-free-hyp-scope]: carry the
+                  ; actual matched hypothesis into the selected alternatives.
+                  (let (#-acl2-loop-only (*structured-fc-free-hyp* hyp))
                   (advance-fc-activation3
                    act0 (cdr hyps) new-unify-subst-list new-ttree-list
                    fc-round type-alist ens force-flg wrld state oncep-override
@@ -2967,7 +2984,7 @@
                               unify-subst
                               ttree)
                              suspensions))
-                   fcd-lst))
+                   fcd-lst)))
                  ((and forcer-fn force-flg)
 
 ; In this case, we found no instances of this hyp on type-alist and it
@@ -3023,6 +3040,11 @@
 ; evaluable ground term, or a FORCE or CASE-SPLIT.  Inst-hyp must be
 ; true under type-alist to proceed.
 
+    ; TRACE-LOG[infra/fc-hyp-query-1]: collect this executed
+    ; hypothesis query's recursive calls, isolated from other activations.
+    (let (#-acl2-loop-only
+          (*structured-ts-queries* (and (consp *structured-rewrite-log*) (list nil))))
+
     (mv-let
      (ts ttree1)
      (type-set inst-hyp force-flg nil type-alist ens wrld nil
@@ -3053,10 +3075,19 @@
 
 ; Finally!  We're past inst-hyp and begin to work our way down hyps.
 
+       ; TRACE-LOG[infra/fc-hyp-type-relief-1]: the actual successful
+       ; suspended-hyp query, including its type-alist and returned evidence.
+       (let (#-acl2-loop-only
+             (*structured-fc-reliefs*
+              (cons (list :route :type-set :instance inst-hyp :subst unify-subst
+                          :remaining-hyps hyps :result ts :ttree ttree1
+                          :type-alist type-alist :queries
+                          (reverse (car *structured-ts-queries*)))
+                    *structured-fc-reliefs*)))
        (advance-fc-activation2
         act0 hyps unify-subst (cons-tag-trees ttree1 ttree)
         fc-round type-alist ens force-flg wrld state oncep-override
-        suspensions fcd-lst)))))))
+        suspensions fcd-lst)))))))))
 
 (defun advance-fc-activation2
   (act0 hyps unify-subst ttree                               ; key args
@@ -3129,6 +3160,11 @@
 ; forcing/case splitting.
 
         (let ((inst-hyp (sublis-var unify-subst hyp)))
+    ; TRACE-LOG[infra/fc-hyp-query-2]: collect this executed
+    ; hypothesis query's recursive calls, isolated from other activations.
+    (let (#-acl2-loop-only
+          (*structured-ts-queries* (and (consp *structured-rewrite-log*) (list nil))))
+
           (mv-let (ts ttree1)
                   (type-set inst-hyp force-flg nil type-alist ens wrld nil
                             nil nil)
@@ -3295,11 +3331,22 @@
 ; Inst-hyp is true under type-alist.  We add type-set's ttree1 to ttree
 ; as we move on.
 
+                     ; TRACE-LOG[infra/fc-hyp-type-relief-2]: freeze
+                     ; the actual successful instantiated-hyp query.
+                     (let (#-acl2-loop-only
+                           (*structured-fc-reliefs*
+                            (cons (list :route :type-set :hyp hyp
+                                        :instance inst-hyp :subst unify-subst
+                                        :remaining-hyps (cdr hyps)
+                                        :result ts :ttree ttree1
+                                        :type-alist type-alist :queries
+                                        (reverse (car *structured-ts-queries*)))
+                                  *structured-fc-reliefs*)))
                      (advance-fc-activation2
                       act0 (cdr hyps) unify-subst
                       (cons-tag-trees ttree1 ttree)
                       fc-round type-alist ens force-flg wrld state oncep-override
-                      suspensions fcd-lst)))))))))))
+                      suspensions fcd-lst)))))))))))))
 
 (defun advance-fc-activation3
   (act0 hyps unify-subst-lst ttree-lst                       ; key args
@@ -3309,12 +3356,21 @@
          (mv suspensions fcd-lst))
         (t
          (mv-let (suspensions1 fcd-lst1)
+                 ; TRACE-LOG[infra/fc-free-hyp-choice]: attach exactly
+                 ; this returned match's substitution and supporting ttree.
+                 (let (#-acl2-loop-only
+                       (*structured-fc-reliefs*
+                        (cons (list :route :free-vars :hyp *structured-fc-free-hyp*
+                                    :subst (car unify-subst-lst)
+                                    :remaining-hyps hyps :ttree (car ttree-lst)
+                                    :type-alist type-alist)
+                              *structured-fc-reliefs*)))
                  (advance-fc-activation2
                   act0
                   hyps (car unify-subst-lst) (car ttree-lst)
                   fc-round type-alist ens force-flg wrld state oncep-override
                   suspensions
-                  fcd-lst)
+                  fcd-lst))
                  (advance-fc-activation3
                   act0
                   hyps (cdr unify-subst-lst) (cdr ttree-lst)
@@ -3327,6 +3383,11 @@
 
 (defun advance-fc-activation (act fc-round type-alist ens force-flg wrld state oncep-override
                                   suspensions fcd-lst)
+  ; TRACE-LOG[infra/fc-resume-reliefs]: isolate sibling activation paths and
+  ; resume only the history attached to this actual activation object.
+  (let (#-acl2-loop-only
+        (*structured-fc-reliefs* (gethash act *structured-fc-suspended-reliefs*)))
+
   (with-accumulated-persistence
    (access forward-chaining-rule
            (access fc-activation act :rule)
@@ -3341,7 +3402,8 @@
     (access fc-activation act :ttree)
     fc-round type-alist ens force-flg wrld state oncep-override
     suspensions
-    fcd-lst)))
+    fcd-lst))) )
+
 
 ; Recall the basic data structure of forward chaining, the fc-pot-lst.
 ; It is a list of fc-pots, each of which is (term act1 ... actn), with a

@@ -14351,6 +14351,12 @@ evaluated.  See :DOC certify-book, in particular, the discussion about ``Step
     ; and created-object attachment observers.
     advance-fc-activation2 ; *structured-fc-rule-basis*
     add-fc-derivations ; *structured-fc-derivation-rules*
+    ; TRACE-LOG[infra/fc-relief-program-fns]: declare observational query,
+    ; branch and suspension history scopes; logical returns are unchanged.
+    advance-fc-activation1 ; *structured-fc-reliefs*
+    advance-fc-activation3 ; *structured-fc-reliefs*
+    advance-fc-activation ; *structured-fc-reliefs*
+    suspend-fc-activation ; *structured-fc-suspended-reliefs*
     relieve-hyps1-free-1 ; *structured-rewrite-log* (free-var hyp-relief marker)
     relieve-hyps1-free-2 ; *structured-rewrite-log* (ground-unit hyp-relief markers)
     relieve-hyps1-unify-subst-lst ; *structured-rewrite-log* (F4 retry checkpoint)

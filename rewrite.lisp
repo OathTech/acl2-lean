@@ -45,6 +45,16 @@
 (defvar *structured-fc-rule-basis* nil)
 #-acl2-loop-only
 (defvar *structured-fc-derivation-rules* (make-hash-table :test 'eq))
+; TRACE-LOG[infra/fc-relief-history]: an executed activation path's relief
+; records, saved by identity across suspension and on created derivations.
+#-acl2-loop-only
+(defvar *structured-fc-reliefs* nil)
+#-acl2-loop-only
+(defvar *structured-fc-free-hyp* nil)
+#-acl2-loop-only
+(defvar *structured-fc-suspended-reliefs* (make-hash-table :test 'eq))
+#-acl2-loop-only
+(defvar *structured-fc-derivation-reliefs* (make-hash-table :test 'eq))
 
 ; TRACE-LOG[infra/ta-derivations]: share FC serialization and walk a ttree into the
 ; :TA-DERIVATIONS provenance payload (close-out cluster item 4, 2026-08-02):
@@ -71,7 +81,8 @@
                    :supports (mapcar #'encode
                                      (tagged-objects 'fc-derivation
                                                      (access fc-derivation d :ttree)))
-                   :rule-basis (gethash d *structured-fc-derivation-rules*))))
+                   :rule-basis (gethash d *structured-fc-derivation-rules*)
+                   :hyp-reliefs (gethash d *structured-fc-derivation-reliefs*))))
     (encode fcd)))
 #-acl2-loop-only
 (defun structured-ta-derivations (ttree)

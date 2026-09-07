@@ -37,6 +37,11 @@
 (defvar *structured-comparison-query* nil)
 #-acl2-loop-only
 (defvar *structured-known-comparison-basis* nil)
+; TRACE-LOG[infra/fc-type-query-tree]: collect the actual recursive type-set
+; calls only inside an FC hypothesis query. Cells retain child order, the
+; lookup pair, and the selected local route; no second query is performed.
+#-acl2-loop-only
+(defvar *structured-ts-queries* nil)
 #-acl2-loop-only
 (defvar *structured-lookup-entry* nil)
 #-acl2-loop-only
@@ -8059,6 +8064,21 @@
 ; That allows us to catch this.  Our hope is that it does not slow us
 ; down too much.
 
+  ; TRACE-LOG[infra/fc-type-query-scope]: observe this call's returned values
+  ; and executed children. Existing known-true observers keep their cells
+  ; outside FC queries, and each nested FC query owns separate cells.
+  (let* (#-acl2-loop-only
+         (structured-parent-query *structured-ts-queries*)
+         #-acl2-loop-only
+         (*structured-ts-queries* (and structured-parent-query (list nil nil nil)))
+         #-acl2-loop-only
+         (*structured-comparison-query*
+          (if structured-parent-query (list x nil nil) *structured-comparison-query*))
+         #-acl2-loop-only
+         (*structured-recognizer-query*
+          (if structured-parent-query (list x) *structured-recognizer-query*)))
+    (mv-let (structured-ts-value structured-ts-ttree)
+
   (mv-let
    (ts0 ttree0)
    (cond ((and (consp dwp)
@@ -8071,6 +8091,13 @@
 
           (mv (cadr dwp) (cddr dwp)))
          (t (assoc-type-alist x type-alist w)))
+   ; TRACE-LOG[infra/fc-type-lookup-pair]: retain the actual lookup result
+   ; before the double-whammy decision; this pair need not be selected.
+   (progn$
+    #-acl2-loop-only
+    (when *structured-ts-queries*
+      (setf (cadr *structured-ts-queries*) (list ts0 ttree0)))
+    #+acl2-loop-only nil
    (cond
     ((and ts0
           (or (not dwp)
@@ -8100,6 +8127,12 @@
         (setf (caddr *structured-comparison-query*)
               (list :lookup :entry (cadr *structured-comparison-query*)
                     :result ts0)))
+      #+acl2-loop-only nil
+      ; TRACE-LOG[infra/fc-type-lookup-selected]: mark the executed return,
+      ; distinguishing it from an unselected candidate lookup.
+      #-acl2-loop-only
+      (when *structured-ts-queries*
+        (setf (caddr *structured-ts-queries*) :lookup))
       #+acl2-loop-only nil
       (mv ts0 (cons-tag-trees ttree ttree0))))
     ((variablep x)
@@ -8205,7 +8238,14 @@
                            type-alist ancestors
                            ens w ttree pot-lst pt backchain-limit)
              (mv-let (ts1 ttree1)
-                     (type-set-not ts1 ttree1 ttree)
+                     (progn$
+                      ; TRACE-LOG[infra/fc-type-not-selected]: preserve the
+                      ; operand mask consumed by this actual NOT branch.
+                      #-acl2-loop-only
+                      (when *structured-ts-queries*
+                        (setf (caddr *structured-ts-queries*) (list :not :arg-ts ts1)))
+                      #+acl2-loop-only nil
+                      (type-set-not ts1 ttree1 ttree))
                      (type-set-finish x ts0 ttree0 ts1 ttree1 type-alist))))
     (t
      (let* ((fn (ffn-symb x))
@@ -8488,6 +8528,20 @@
                  (declare (ignore extended-p))
                  (type-set-finish x ts0 ttree0 ts1 ttree1
                                   type-alist)))))))))
+      (progn$
+       #-acl2-loop-only
+       (when structured-parent-query
+         (push (list :term x :result structured-ts-value
+                     :ttree structured-ts-ttree :input-ttree ttree :dwp dwp
+                     :lookup (cadr *structured-ts-queries*)
+                     :route (caddr *structured-ts-queries*)
+                     :comparison (caddr *structured-comparison-query*)
+                     :recognizer (cdr *structured-recognizer-query*)
+                     :children (reverse (car *structured-ts-queries*)))
+               (car structured-parent-query)))
+       #+acl2-loop-only nil
+       (mv structured-ts-value structured-ts-ttree)))))
+
 
 (defun type-set-lst (x force-flg dwp type-alist ancestors ens w
                      pot-lst pt backchain-limit)
