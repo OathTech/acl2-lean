@@ -50,6 +50,11 @@
 ; lookup pair, and the selected local route; no second query is performed.
 #-acl2-loop-only
 (defvar *structured-ts-queries* nil)
+; TRACE-LOG[infra/type-query-atf-decision]: the owning IF query lends a
+; one-slot cell to its actual root assumption call; nested calls cannot
+; replace the selected root decision. No query or rule selection is repeated.
+#-acl2-loop-only
+(defvar *structured-atf-query-decision* nil)
 #-acl2-loop-only
 (defvar *structured-lookup-entry* nil)
 #-acl2-loop-only
@@ -8445,6 +8450,11 @@
 
          (mv-let
           (ts1 ttree1)
+          ; TRACE-LOG[infra/type-query-atf-scope]: retain the decision from
+          ; this IF's executed assumption call before running its branches.
+          (let (#-acl2-loop-only
+                (*structured-atf-query-decision*
+                 (and *structured-ts-queries* (list nil))))
           (mv-let
            (must-be-true
             must-be-false
@@ -8478,6 +8488,7 @@
                           :must-be-false must-be-false
                           :decision-query-count (length (car *structured-ts-queries*))
                           :decision-ttree ttree1
+                          :decision-basis (car *structured-atf-query-decision*)
                           :true-type-alist true-type-alist
                           :false-type-alist false-type-alist)))
             #+acl2-loop-only nil
@@ -8550,7 +8561,7 @@
                                                   pot-lst pt
                                                   backchain-limit)
                                     (mv (ts-union ts1 ts2)
-                                        ttree)))))))
+                                        ttree))))))))
           (type-set-finish x ts0 ttree0 ts1 ttree1 type-alist)))
         ((member-eq fn *expandable-boot-strap-non-rec-fns*)
 
@@ -10306,6 +10317,13 @@
 ;;;       ;; optional from Matt K.:
 ;;;       :hints (("Goal" :do-not '(preprocess)))))
 
+  ; TRACE-LOG[infra/type-query-atf-root]: capture the caller's root cell
+  ; lexically and mask it during recursive assumption calls. Nested IF
+  ; type queries establish independent cells at their own call sites.
+  (let* (#-acl2-loop-only
+         (structured-root-decision *structured-atf-query-decision*)
+         #-acl2-loop-only
+         (*structured-atf-query-decision* nil))
   (mv-let (xnot-flg x)
 
 ; Rockwell Addition:  This is a minor improvement.
@@ -10420,6 +10438,21 @@
                                   dwp
                                   type-alist ancestors ens w nil
                                   pot-lst pt backchain-limit)
+                    (progn$
+                     ; TRACE-LOG[infra/type-query-atf-recognizer]: record the
+                     ; tuple and argument query consumed by this actual arm,
+                     ; including source normalization and strengthening.
+                     #-acl2-loop-only
+                     (when structured-root-decision
+                       (setf (car structured-root-decision)
+                             (list :kind :recognizer :term x
+                                   :not-flg xnot-flg :argument arg
+                                   :argument-ts ts
+                                   :query-index (1- (length (car *structured-ts-queries*)))
+                                   :true-ts true-ts :false-ts false-ts
+                                   :strongp strongp :runes rune[s]
+                                   :strengthening-ts ts0)))
+                     #+acl2-loop-only nil
                     (let ((t-int (ts-intersection ts
                                                   (if ts0
                                                       (ts-union ts0 true-ts)
@@ -10546,7 +10579,7 @@
                                             type-alist0
                                             w
                                             pot-lst pt backchain-limit)))))
-                                  nil nil)))))))))))
+                                  nil nil))))))))))))
            ((member-eq (ffn-symb x)
                        *expandable-boot-strap-non-rec-fns*)
 
@@ -11603,7 +11636,7 @@
            (t (assume-true-false1 xnot-flg x xttree
                                   force-flg dwp type-alist ancestors ens
                                   w
-                                  pot-lst pt backchain-limit)))))))))
+                                  pot-lst pt backchain-limit))))))))))
 
 (defun assume-true-false1 (not-flg x xttree force-flg dwp type-alist ancestors
                                    ens w pot-lst pt backchain-limit)
